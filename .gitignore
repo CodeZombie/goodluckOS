@@ -1,4 +1,5 @@
 home/out/*
+home/staging/*
 image/out/*
 kernel/out/*
 rootfs/out/*

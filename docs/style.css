@@ -1,0 +1,348 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    border-radius: 0 !important;
+}
+
+body {
+    background-color: #FFFFFF;
+    color: #000000;
+    font-family: 'MS PGothic', 'Impact', 'Courier New', monospace;
+    line-height: 1.4;
+    text-transform: uppercase;
+    padding: 10px;
+}
+
+.red-text { color: #FF0000; }
+.red-bg { background-color: #FF0000; }
+.text-white { color: #FFFFFF; }
+.yellow-bg { background-color: #FFFF00; }
+.bold-cell { font-weight: bold; background-color: #FFFFCC; }
+
+.wrapper {
+    max-width: 900px;
+    margin: 0 auto;
+    border: 5px solid #000000;
+    background-color: #FFFFFF;
+    box-shadow: 10px 10px 0px #000000;
+}
+
+.thick-divider {
+    border: none;
+    border-top: 5px solid #000000;
+    margin: 0;
+}
+
+.advert-header {
+    background-color: #E6E6E6;
+    padding: 0;
+    border-bottom: 5px solid #000000;
+}
+
+.warning-stripe {
+    background-color: #FFFF00;
+    color: #000000;
+    font-weight: bold;
+    border-bottom: 3px solid #000000;
+    padding: 5px;
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.8rem;
+    overflow: hidden;
+}
+
+.hero-grid {
+    display: flex;
+    border-bottom: 3px solid #000000;
+}
+
+.title-block {
+    flex: 2;
+    padding: 20px;
+    border-right: 3px solid #000000;
+    background-color: #FFFFFF;
+}
+
+.japanese-text {
+    font-size: 1.5rem;
+    color: #FF0000;
+    margin-bottom: 5px;
+    letter-spacing: 2px;
+}
+
+.logo-text {
+    font-size: 4.5rem;
+    line-height: 1;
+    font-family: 'Arial Black', Impact, sans-serif;
+    letter-spacing: -2px;
+}
+
+.version-badge {
+    display: inline-block;
+    background-color: #000000;
+    color: #FFFF00;
+    padding: 5px 15px;
+    font-weight: bold;
+    font-size: 1.2rem;
+    margin-top: 10px;
+}
+
+.mascot-block {
+    flex: 1;
+    display: flex;
+    max-height:16rem;
+    max-width:16rem;
+    margin:-12px;
+}
+
+
+.mascot-placeholder {
+    width: 100%;
+    height: 100%;
+    min-height: 150px;
+    background-color: #FFFFFF;
+    border: 3px dashed #000000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    font-weight: bold;
+    font-family: 'Courier New', monospace;
+    font-size: 0.9rem;
+}
+
+.hero-sub {
+    padding: 15px;
+    background-color: #000000;
+    color: #FFFFFF;
+    text-align: center;
+    font-weight: bold;
+    font-size: 1.2rem;
+}
+
+.action-box {
+    padding: 20px;
+    text-align: center;
+    background-color: #FFFFFF;
+}
+
+.btn-download {
+    display: block;
+    background-color: #FF0000;
+    color: #FFFFFF;
+    text-decoration: none;
+    font-size: 1.8rem;
+    font-weight: bold;
+    padding: 15px;
+    border: 4px solid #000000;
+    margin-bottom: 15px;
+    box-shadow: 5px 5px 0px #000000;
+}
+
+.btn-download:active {
+    box-shadow: 0px 0px 0px #000000;
+    transform: translate(5px, 5px);
+}
+
+.btn-secondary {
+    display: inline-block;
+    color: #000000;
+    text-decoration: none;
+    font-weight: bold;
+    font-family: 'Courier New', monospace;
+    border-bottom: 2px solid #000000;
+}
+
+.ad-section {
+    padding: 30px 20px;
+    background-color: #FFFFFF;
+}
+
+.inverted-section {
+    background-color: #000000;
+    color: #FFFFFF;
+}
+
+.section-title {
+    font-size: 2rem;
+    margin-bottom: 20px;
+    text-decoration: underline;
+    text-decoration-thickness: 3px;
+    text-underline-offset: 5px;
+}
+
+.inverted-section .section-title {
+    color: #FFFF00;
+}
+
+.feature-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 15px;
+}
+
+.feature-box {
+    border: 3px solid #000000;
+    padding: 15px;
+    background-color: #F0F0F0;
+}
+
+.feature-icon {
+    font-size: 2rem;
+    margin-bottom: 10px;
+}
+
+.feature-box h3 {
+    background-color: #000000;
+    color: #FFFFFF;
+    padding: 5px;
+    margin-bottom: 10px;
+    display: inline-block;
+}
+
+/* --- OS Info --- */
+.spec-container {
+    border: 3px solid #FFFFFF;
+    padding: 20px;
+    position: relative;
+    overflow: hidden;
+}
+
+.spec-intro {
+    font-size: 1.2rem;
+    margin-bottom: 20px;
+    color: #CCCCCC;
+}
+
+.spec-list {
+    list-style-type: square;
+    padding-left: 20px;
+    font-size: 1.1rem;
+}
+
+.spec-list li {
+    margin-bottom: 10px;
+}
+
+.kanji-watermark {
+    position: absolute;
+    bottom: -20px;
+    right: -20px;
+    font-size: 8rem;
+    color: #FF0000;
+    opacity: 0.3;
+    z-index: 0;
+    user-select: none;
+}
+
+/* --- Comparison Table --- */
+.comparison-sub {
+    font-weight: bold;
+    margin-bottom: 15px;
+    color: #FF0000;
+}
+
+.tech-table {
+    width: 100%;
+    border-collapse: collapse;
+    border: 4px solid #000000;
+}
+
+.tech-table th, .tech-table td {
+    border: 2px solid #000000;
+    padding: 12px;
+    text-align: left;
+    font-family: 'Courier New', monospace;
+    font-weight: bold;
+}
+
+.tech-table th {
+    background-color: #000000;
+    color: #FFFFFF;
+    font-family: 'MS PGothic', sans-serif;
+    font-size: 1.1rem;
+}
+
+.step-container {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.step-box {
+    display: flex;
+    border: 3px solid #000000;
+}
+
+.step-num {
+    background-color: #FF0000;
+    color: #FFFFFF;
+    font-weight: bold;
+    font-size: 1.5rem;
+    padding: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    writing-mode: vertical-rl;
+    text-orientation: mixed;
+    border-right: 3px solid #000000;
+}
+
+.step-text {
+    padding: 15px;
+    background-color: #FFFFE0;
+    flex-grow: 1;
+}
+
+.step-text h3 {
+    border-bottom: 2px solid #000000;
+    padding-bottom: 5px;
+    margin-bottom: 10px;
+}
+
+.advert-footer {
+    background-color: #000000;
+    color: #FFFFFF;
+    padding: 20px;
+}
+.advert-footer a:visited {
+    color: yellow;
+}
+
+.footer-grid {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.footer-logo {
+    font-size: 2rem;
+    font-weight: bold;
+    font-family: 'Arial Black', Impact, sans-serif;
+}
+
+.footer-text {
+    font-family: 'Courier New', monospace;
+    font-size: 0.8rem;
+    text-align: right;
+    color: #AAAAAA;
+}
+
+#slogan {
+    font-weight: 900;
+    background: black;
+    color: white;
+    padding:0.5rem;
+}
+
+@media (max-width: 768px) {
+    .hero-grid { flex-direction: column; }
+    .title-block { border-right: none; border-bottom: 3px solid #000000; }
+    .feature-grid { grid-template-columns: 1fr; }
+    .footer-grid { flex-direction: column; text-align: center; gap: 15px; }
+    .footer-text { text-align: center; }
+    .step-box { flex-direction: column; }
+    .step-num { writing-mode: horizontal-tb; border-right: none; border-bottom: 3px solid #000000; padding: 10px; }
+    .logo-text { font-size: 3rem; }
+}

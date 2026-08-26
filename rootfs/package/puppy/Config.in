@@ -1,0 +1,12 @@
+config BR2_PACKAGE_PUPPY_LAUNCHER
+	bool "puppy"
+	depends on BR2_INSTALL_LIBSTDCPP # C++ is required
+	select BR2_PACKAGE_SDL2
+	select BR2_PACKAGE_SDL2_IMAGE
+	select BR2_PACKAGE_SDL2_TTF
+	select BR2_PACKAGE_SDL2_GFX
+	help
+	  The Puppy Launcher.
+
+comment "puppy needs a toolchain w/ C++"
+	depends on !BR2_INSTALL_LIBSTDCPP

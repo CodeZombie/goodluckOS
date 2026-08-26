@@ -1,0 +1,58 @@
+#!/bin/sh
+
+case "$1" in
+  start)
+    echo "Starting USB Composite Gadget..."
+
+    # Mount configfs if not already mounted
+    mount -t configfs none /sys/kernel/config 2>/dev/null
+
+    cd /sys/kernel/config/usb_gadget
+    mkdir -p g1
+    cd g1
+
+    # Set Vendor/Product IDs (Linux Foundation defaults)
+    echo 0x1d6b > idVendor
+    echo 0x0104 > idProduct
+    echo 0x0100 > bcdDevice
+    echo 0x0200 > bcdUSB
+
+    # Set English strings
+    mkdir -p strings/0x409
+    echo "0123456789" > strings/0x409/serialnumber
+    echo "GoodluckOS"  > strings/0x409/manufacturer
+    echo "GA36MB" > strings/0x409/product
+
+    # Create the configuration
+    mkdir -p configs/c.1/strings/0x409
+    echo "Serial + Network" > configs/c.1/strings/0x409/configuration
+    echo 250 > configs/c.1/MaxPower
+
+    # Instantiate the functions
+    mkdir -p functions/acm.usb0
+    mkdir -p functions/ecm.usb0
+
+    # Link functions to the configuration
+    ln -s functions/acm.usb0 configs/c.1/
+    ln -s functions/ecm.usb0 configs/c.1/
+
+    # Bind the gadget to the UDC (USB Device Controller)
+    # 'ls' grabs the active Sunxi UDC (e.g., musb-hdrc.1.auto)
+    ls /sys/class/udc > UDC
+    ;;
+  stop)
+    echo "Stopping USB Composite Gadget..."
+    echo "" > /sys/kernel/config/usb_gadget/g1/UDC
+    rm -f /sys/kernel/config/usb_gadget/g1/configs/c.1/acm.usb0
+    rm -f /sys/kernel/config/usb_gadget/g1/configs/c.1/ecm.usb0
+    rmdir /sys/kernel/config/usb_gadget/g1/configs/c.1/strings/0x409
+    rmdir /sys/kernel/config/usb_gadget/g1/configs/c.1
+    rmdir /sys/kernel/config/usb_gadget/g1/functions/acm.usb0
+    rmdir /sys/kernel/config/usb_gadget/g1/functions/ecm.usb0
+    rmdir /sys/kernel/config/usb_gadget/g1/strings/0x409
+    rmdir /sys/kernel/config/usb_gadget/g1
+    ;;
+  *)
+    echo "Usage: $0 {start|stop}"
+    exit 1
+esac

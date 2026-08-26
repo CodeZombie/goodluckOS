@@ -1,0 +1,11 @@
+version: '3.8'
+services:
+  goodluck-builder:
+    build: .
+    volumes:
+      - ./scripts:/src/scripts:ro,z
+      - ./board:/src/board:ro,z
+      - ./configs:/src/configs:z
+      - ./package:/src/package:ro,z
+      - ./out:/src/out:z
+    command: sh -c "/src/scripts/configure.sh && tail -f /dev/null"

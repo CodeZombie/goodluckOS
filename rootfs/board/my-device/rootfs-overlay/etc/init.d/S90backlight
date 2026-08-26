@@ -1,0 +1,9 @@
+#!/bin/sh
+# Allow the video group to adjust screen brightness
+
+case "$1" in
+  start)
+    chgrp video /sys/class/backlight/backlight/brightness
+    chmod 664 /sys/class/backlight/backlight/brightness
+    ;;
+esac

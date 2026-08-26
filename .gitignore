@@ -1,0 +1,8 @@
+home/out/*
+image/out/*
+kernel/out/*
+rootfs/out/*
+image/sdcard.img
+image/staging/*
+rootfs/package/*/local-out/*
+rootfs/package/*/imgui

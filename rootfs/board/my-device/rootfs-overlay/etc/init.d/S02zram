@@ -1,0 +1,28 @@
+#!/bin/sh
+
+case "$1" in
+  start)
+    printf "Starting ZRAM swap... "
+    echo zstd > /sys/block/zram0/comp_algorithm
+    echo 256M > /sys/block/zram0/disksize
+    mkswap /dev/zram0 > /dev/null 2>&1 # Format as swap space
+    swapon -p 100 /dev/zram0 # Enable with high priority
+    echo "OK"
+    ;;
+  stop)
+    printf "Stopping ZRAM swap... "
+    swapoff /dev/zram0
+    # free the memory allocated by ZRAM
+    echo 1 > /sys/block/zram0/reset
+    echo "OK"
+    ;;
+  restart|reload)
+    "$0" stop
+    "$0" start
+    ;;
+  *)
+    echo "Usage: $0 {start|stop|restart}"
+    exit 1
+esac
+
+exit 0

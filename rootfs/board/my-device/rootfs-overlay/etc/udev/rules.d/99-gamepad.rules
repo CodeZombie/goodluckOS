@@ -1,0 +1,1 @@
+SUBSYSTEM=="input", ATTRS{name}=="GA36-MB-Gamepad", ENV{ID_INPUT_JOYSTICK}="1", ENV{ID_INPUT_KEY}="0"

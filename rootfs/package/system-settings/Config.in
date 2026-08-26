@@ -1,0 +1,9 @@
+config BR2_PACKAGE_SYSTEM_SETTINGS
+	bool "system-settings"
+	depends on BR2_INSTALL_LIBSTDCPP
+	select BR2_PACKAGE_SDL2
+	help
+	  System Settings IMGUI Application controlled via Gamepad.
+
+comment "system-settings needs a toolchain w/ C++"
+	depends on !BR2_INSTALL_LIBSTDCPP

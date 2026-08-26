@@ -1,0 +1,4 @@
+menu "goodluckOS Custom Packages"
+source "../package/retroarch/Config.in"
+source "../package/puppy/Config.in"
+endmenu

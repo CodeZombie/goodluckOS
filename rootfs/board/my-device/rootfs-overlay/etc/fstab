@@ -1,0 +1,7 @@
+/dev/mmcblk0p1  /        ext4   defaults                                0  1
+/dev/mmcblk0p2  /home/player  vfat   defaults,rw,uid=1000,gid=1000,umask=022  0  0
+proc		    /proc	 proc	defaults	                            0  0
+devpts		    /dev/pts devpts	defaults,gid=5,mode=620,ptmxmode=0666	0  0
+tmpfs		    /dev/shm tmpfs	mode=1777	                            0  0
+tmpfs           /tmp     tmpfs  defaults,noatime,mode=1777,size=64M     0  0
+sysfs		    /sys	 sysfs	defaults	                            0  0

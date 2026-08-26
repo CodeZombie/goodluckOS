@@ -1,0 +1,7 @@
+[Desktop Entry]
+Name=PrBoom
+Type=Application
+Categories=Games
+Background=/usr/share/backgrounds/prboom.png
+Description=The PrBoom engine
+Exec=env SDL_NOMOUSE=1 /usr/games/prboom

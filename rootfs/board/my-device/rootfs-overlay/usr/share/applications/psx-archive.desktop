@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Archive
+Name=PSX
+Categories=PSX;Games;
+Description=PSX Games Archive
+Directory=/home/player/roms/psx
+FileExtensions=cue;
+Exec=retroarch -L /home/player/.config/retroarch/cores/pcsx_rearmed_libretro.so %s

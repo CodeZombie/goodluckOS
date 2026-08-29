@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Archive
+Name=SNES
+Categories=SNES;Games;
+Background=/usr/share/backgrounds/snes.png
+Description=SNES Games Archive
+Directory=/home/player/roms/snes
+BackgroundDirectory=/home/player/roms/snes/backgrounds/%s.{png;jpg;bmp}
+IconsDirectory=/home/player/roms/snes/icons/%s.{png;jpg;bmp}
+FileExtensions=sfc;smc;
+Exec=retroarch %s

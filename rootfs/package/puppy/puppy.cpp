@@ -115,17 +115,23 @@ public:
 
     // Desktop Entry Spec field codes (%f, %F, %u, %U, %i, %c, %k, etc) are
     // meant to be substituted by the launcher or dropped if unsupported.
-    // The user has no way of sending args to entries, so we strip them.
+    // The user has no way of sending args to entries, so we strip them
+    // except `%s` - that one is still used for Archive entries.
     static std::string stripExecCodes(const std::string& exec) {
         std::string result;
         result.reserve(exec.size());
         for (size_t i = 0; i < exec.size(); ++i) {
             if (exec[i] == '%' && i + 1 < exec.size()) {
-                if (exec[i + 1] == '%') {
+                char next = exec[i + 1];
+                if (next == '%') {
                     result += '%';
                     ++i;
+                } else if (next == 's') {
+                    // Preserve %s so we can substitute it later for Archives
+                    result += "%s";
+                    ++i;
                 } else {
-                    ++i; // drop the field code entirely
+                    ++i; // drop spec codes like %f, %F, %u, etc.
                 }
             } else {
                 result += exec[i];
@@ -167,12 +173,50 @@ public:
     }
 
 private:
+    // Resolves patterns like /path/%s.{png;jpg} against the filesystem
+    static std::string resolveAssetPattern(const std::string& pattern, const std::string& basename) {
+        if (pattern.empty()) return "";
+
+        std::string resolved = pattern;
+        size_t pos = resolved.find("%s");
+        if (pos != std::string::npos) {
+            resolved.replace(pos, 2, basename);
+        }
+
+        size_t braceStart = resolved.find('{');
+        size_t braceEnd = resolved.find('}', braceStart);
+        if (braceStart != std::string::npos && braceEnd != std::string::npos && braceEnd > braceStart) {
+            std::string prefix = resolved.substr(0, braceStart);
+            std::string suffix = resolved.substr(braceEnd + 1);
+            std::string exts = resolved.substr(braceStart + 1, braceEnd - braceStart - 1);
+
+            size_t start = 0;
+            while (start < exts.length()) {
+                size_t end = exts.find(';', start);
+                if (end == std::string::npos) end = exts.length();
+                std::string ext = exts.substr(start, end - start);
+                if (!ext.empty()) {
+                    std::string testPath = prefix + ext + suffix;
+                    if (fs::exists(testPath)) return testPath;
+                }
+                start = end + 1;
+            }
+            return "";
+        }
+
+        if (fs::exists(resolved)) return resolved;
+        return "";
+    }
+
     static void parseFile(const std::string& filepath, LauncherModel& model) {
         std::ifstream file(filepath);
         std::string line;
         bool inDesktopEntry = false;
         DesktopEntry entry;
         entry.type = "Applications";
+
+        bool isArchive = false;
+        std::string directory, bgDir, iconDir, fileExts, rawExec;
 
         while (std::getline(file, line)) {
             if (line.empty() || line[0] == '#') continue;
@@ -190,32 +234,97 @@ private:
                 std::string val = line.substr(delim + 1);
 
                 if (key == "Name") entry.name = val;
-                else if (key == "Exec") entry.exec = stripExecCodes(val);
+                else if (key == "Exec") rawExec = val;
                 else if (key == "Icon") entry.iconPath = val;
                 else if (key == "Background") entry.bgPath = val;
                 else if (key == "Type") {
-                    // .desktop entries could be Application, Link or Directory.
-                    // Only Application entries are supported, so skip any others.
-                    if (val != "Application") entry.skip = true;
+                    if (val == "Archive") {
+                        isArchive = true;
+                        entry.skip = false;
+                    } else if (val != "Application") {
+                        entry.skip = true;
+                    } else {
+                        entry.skip = false;
+                    }
                 }
-                else if (key == "NoDisplay") {
-                    if (val == "true") entry.skip = true;
-                }
-                else if (key == "Hidden") {
-                    if (val == "true") entry.skip = true;
-                }
+                else if (key == "NoDisplay" && val == "true") entry.skip = true;
+                else if (key == "Hidden" && val == "true") entry.skip = true;
                 else if (key == "Categories") {
                     // Categories is a ';'-separated list; group by the first entry.
                     // e.g. "Game;Emulator;" becomes just "Game".
                     auto firstCat = val.substr(0, val.find(';'));
                     if (!firstCat.empty()) entry.type = firstCat;
                 }
+                else if (key == "Directory") directory = val;
+                else if (key == "BackgroundDirectory") bgDir = val;
+                else if (key == "IconsDirectory") iconDir = val;
+                else if (key == "FileExtensions") fileExts = val;
             }
         }
 
-        if (!entry.skip && !entry.name.empty() && !entry.exec.empty()) {
-            entry.hue = generateHue(entry.name);
-            model.addEntry(entry);
+        if (entry.skip) return;
+
+        if (isArchive) {
+            if (directory.empty() || rawExec.empty()) return;
+            if (!fs::exists(directory) || !fs::is_directory(directory)) return;
+
+            // Parse valid extensions
+            std::vector<std::string> exts;
+            size_t start = 0;
+            while (start < fileExts.length()) {
+                size_t end = fileExts.find(';', start);
+                if (end == std::string::npos) end = fileExts.length();
+                std::string ext = fileExts.substr(start, end - start);
+                if (!ext.empty()) {
+                    if (ext[0] != '.') ext = "." + ext;
+                    exts.push_back(ext);
+                }
+                start = end + 1;
+            }
+
+            std::string cleanExec = stripExecCodes(rawExec);
+
+            for (const auto& f : fs::directory_iterator(directory)) {
+                if (!f.is_regular_file()) continue;
+                std::string fExt = f.path().extension().string();
+
+                bool match = false;
+                for (const auto& e : exts) {
+                    if (fExt == e) { match = true; break; }
+                }
+
+                if (match || exts.empty()) {
+                    DesktopEntry arcEntry;
+                    arcEntry.type = entry.type;
+                    arcEntry.name = f.path().stem().string();
+
+                    // Safely insert the quoted file path for every %s
+                    std::string finalExec = cleanExec;
+                    size_t pos = 0;
+                    std::string quotedPath = "\"" + f.path().string() + "\"";
+                    while ((pos = finalExec.find("%s", pos)) != std::string::npos) {
+                        finalExec.replace(pos, 2, quotedPath);
+                        pos += quotedPath.length();
+                    }
+                    arcEntry.exec = finalExec;
+
+                    // Resolve per-file assets, falling back to the Archive default
+                    std::string resolvedBg = resolveAssetPattern(bgDir, arcEntry.name);
+                    arcEntry.bgPath = resolvedBg.empty() ? entry.bgPath : resolvedBg;
+
+                    std::string resolvedIcon = resolveAssetPattern(iconDir, arcEntry.name);
+                    arcEntry.iconPath = resolvedIcon.empty() ? entry.iconPath : resolvedIcon;
+
+                    arcEntry.hue = generateHue(arcEntry.name);
+                    model.addEntry(arcEntry);
+                }
+            }
+        } else {
+            if (!entry.name.empty() && !rawExec.empty()) {
+                entry.exec = stripExecCodes(rawExec);
+                entry.hue = generateHue(entry.name);
+                model.addEntry(entry);
+            }
         }
     }
 };

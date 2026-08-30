@@ -8,7 +8,6 @@ SYSTEM_SETTINGS_SITE = $(SYSTEM_SETTINGS_PKGDIR)
 SYSTEM_SETTINGS_SITE_METHOD = local
 SYSTEM_SETTINGS_DEPENDENCIES = sdl2
 
-# Compile standard C++ files plus ImGui source files
 define SYSTEM_SETTINGS_BUILD_CMDS
 	$(TARGET_CXX) $(TARGET_CXXFLAGS) -std=c++11 \
 		-I$(@D)/imgui \
@@ -22,7 +21,7 @@ define SYSTEM_SETTINGS_BUILD_CMDS
 		$(@D)/imgui/backends/imgui_impl_sdl2.cpp \
 		$(@D)/imgui/backends/imgui_impl_sdlrenderer2.cpp \
 		$(TARGET_LDFLAGS) \
-		-lSDL2
+		-lpthread -ldrm -lSDL2 -lGLESv2 -lEGL -lasound
 endef
 
 define SYSTEM_SETTINGS_INSTALL_TARGET_CMDS

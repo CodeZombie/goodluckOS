@@ -4,4 +4,4 @@ Type=Application
 Categories=System
 Icon=/usr/share/icons/reboot.png
 Description=Reboot the system
-Exec=echo 'reboot' >> /tmp/syscmd
+Exec=reboot

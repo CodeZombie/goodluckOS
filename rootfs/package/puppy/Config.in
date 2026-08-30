@@ -1,4 +1,4 @@
-config BR2_PACKAGE_PUPPY_LAUNCHER
+config BR2_PACKAGE_PUPPY
 	bool "puppy"
 	depends on BR2_INSTALL_LIBSTDCPP # C++ is required
 	select BR2_PACKAGE_SDL2

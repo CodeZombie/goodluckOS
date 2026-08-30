@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Archive
+Name=GBA
+Categories=GBA;Games;
+Description=GBA Games Archive
+Background=/usr/share/backgrounds/gba.png
+BackgroundDirectory=/home/player/roms/gba/backgrounds/%s.{png;jpg;bmp}
+IconsDirectory=/home/player/roms/gba/icons/%s.{png;jpg;bmp}
+Directory=/home/player/roms/gba
+FileExtensions=cue;
+Exec=retroarch -L /usr/lib/libretro/mgba_libretro.so %s

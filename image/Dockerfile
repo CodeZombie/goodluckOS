@@ -34,22 +34,24 @@ tar-in rootfs.tar /
 umount /
 EOF
 
-# Just create the home partition
-# RUN guestfish -a goodluck.img <<EOF
-# run
-# mkfs-opts vfat /dev/sda2 label:HOME
-# EOF
-
 # Create the home partition and extract home.tar into it.
-COPY home.tar ./
+COPY staging/home.tar ./
 RUN guestfish -a goodluck.img <<EOF
 run
 mkfs-opts vfat /dev/sda2 label:HOME
 mount /dev/sda2 /
-mkdir -p /player
-tar-in home.tar /player
+tar-in home.tar /
 umount /
 EOF
+
+# # Inject custom bootlogo
+# COPY res/goodluck_bootlogo.bmp ./goodluck_bootlogo.bmp
+# RUN guestfish -a goodluck.img <<EOF
+# run
+# mount-vfs "offset=37748736" "vfat" /dev/sda /
+# upload goodluck_bootlogo.bmp /bootlogo.bmp
+# umount /
+# EOF
 
 FROM scratch AS export
 COPY --from=builder /workspace/goodluck.img /

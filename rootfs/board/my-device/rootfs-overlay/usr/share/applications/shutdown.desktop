@@ -4,4 +4,4 @@ Type=Application
 Categories=System
 Icon=/usr/share/icons/shutdown.png
 Description=Shut down the system
-Exec=echo 'poweroff' >> /tmp/syscmd
+Exec=poweroff

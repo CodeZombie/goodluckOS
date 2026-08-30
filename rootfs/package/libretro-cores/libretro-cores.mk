@@ -16,12 +16,7 @@ LIBRETRO_MAJOR_CORES_LIST = \
 	fceumm \
 	snes9x2005 \
 	genesis_plus_gx \
-	mgba \
-	gpsp \
 	quicknes \
-	mupen64plus_next \
-	ppsspp \
-	flycast \
 	dosbox \
 	pcsx_rearmed
 

@@ -19,7 +19,6 @@ echo "" >> "$INITTAB"
 echo "# Puppy Bootstrap" >> "$INITTAB"
 echo "tty1::respawn:/bin/su - player -c '/usr/local/bin/puppy-bootstrap.sh'" >> "$INITTAB"
 
-
 echo "auto usb0" >> "$INTERFACES_FILE"
 echo "iface usb0 inet static" >> "$INTERFACES_FILE"
 echo "    address 192.168.7.2" >> "$INTERFACES_FILE"
@@ -27,3 +26,13 @@ echo "    netmask 255.255.255.0" >> "$INTERFACES_FILE"
 
 # Modify the triggerhappy init.d script so that it runs as root instead of 'nobody'
 sed -i 's/ --user nobody//' "$TARGET_DIR/etc/init.d/S10triggerhappy"
+
+# Allow any user to reboot or poweroff
+chmod 4755 ${TARGET_DIR}/sbin/reboot
+chmod 4755 ${TARGET_DIR}/sbin/poweroff
+
+# Add a background to the retroarch .desktop file
+RETROARCH_DESKTOP_ENTRY=${TARGET_DIR}/usr/share/applications/com.libretro.RetroArch.desktop
+if [ -e "$RETROARCH_DESKTOP_ENTRY" ]; then
+    echo "Background=/usr/share/backgrounds/retroarch.png" >> "$RETROARCH_DESKTOP_ENTRY"
+fi

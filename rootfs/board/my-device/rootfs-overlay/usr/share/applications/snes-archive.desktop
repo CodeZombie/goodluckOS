@@ -8,4 +8,4 @@ Directory=/home/player/roms/snes
 BackgroundDirectory=/home/player/roms/snes/backgrounds/%s.{png;jpg;bmp}
 IconsDirectory=/home/player/roms/snes/icons/%s.{png;jpg;bmp}
 FileExtensions=sfc;smc;
-Exec=retroarch %s
+Exec=retroarch -L /home/player/.config/retroarch/cores/snes9x.so %s

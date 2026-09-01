@@ -15,6 +15,17 @@ RUN git clone --depth=1 -b linux-7.2.y https://git.kernel.org/pub/scm/linux/kern
 
 WORKDIR /src/linux
 
+# RUN rm -f drivers/phy/allwinner/phy-sun6i-mipi-dphy.c
+# COPY drivers/phy-sun6i-mipi-dphy.c drivers/phy/allwinner/phy-sun6i-mipi-dphy.c
+
+# Copy overlay files
+# RUN rm -f include/drm/drm_panel.h
+# COPY kernel_overlay/include/drm/drm_panel.h include/drm/drm_panel.h
+# RUN rm -f drivers/gpu/drm/drm_panel.c
+# COPY kernel_overlay/drivers/gpu/drm/drm_panel.c drivers/gpu/drm/drm_panel.c
+# RUN rm -f drivers/gpu/drm/sun4i/sun6i_mipi_dsi.c
+# COPY kernel_overlay/drivers/gpu/drm/sun4i/sun6i_mipi_dsi.c drivers/gpu/drm/sun4i/sun6i_mipi_dsi.c
+
 # Copy our display driver driver
 COPY drivers/jd9366-ga36mbv1-2.c drivers/gpu/drm/panel/jd9366-ga36mbv1-2.c
 # Register the driver in the Kbuild Makefile
@@ -45,10 +56,13 @@ config GA36MB_GAMEPAD\n\
 COPY dts/sun8i-a33-ga36mb-v12.dts arch/arm/boot/dts/allwinner/
 RUN echo 'dtb-$(CONFIG_MACH_SUN8I) += sun8i-a33-ga36mb-v12.dtb' >> arch/arm/boot/dts/allwinner/Makefile
 
+# Retired command line flags:
+# earlycon=uart,mmio32,0x01c28800
+# initcall_debug=1
 RUN make sunxi_defconfig
 RUN ./scripts/config --enable CONFIG_ARM_APPENDED_DTB && \
     ./scripts/config --enable CONFIG_ARM_ATAG_DTB_COMPAT && \
-    ./scripts/config --set-str CONFIG_CMDLINE "root=/dev/mmcblk0p1 rootfstype=ext4 rootwait rw init=/sbin/init coherent_pool=4m boot_type=1 config_size=0 earlycon=uart,mmio32,0x01c28800 loglevel=8 initcall_debug=1" && \
+    ./scripts/config --set-str CONFIG_CMDLINE "root=/dev/mmcblk0p1 rootfstype=ext4 rootwait rw init=/sbin/init coherent_pool=4m boot_type=1 config_size=0 loglevel=8" && \
     ./scripts/config --enable CONFIG_CMDLINE_FORCE && \
     ./scripts/config --enable CONFIG_EXT4_FS && \
     ./scripts/config --enable CONFIG_DEVTMPFS && \
@@ -142,6 +156,7 @@ RUN ./scripts/config --enable CONFIG_ARM_APPENDED_DTB && \
     ./scripts/config --enable CONFIG_SERIAL_DEV_CTRL_TTYPORT && \
     ./scripts/config --enable CONFIG_SERIAL_DEV_BUS && \
     ./scripts/config --enable CONFIG_GA36MB_GAMEPAD && \
+    ./scripts/config --enable CONFIG_PREEMPT_NONE && \
     make olddefconfig
 
 

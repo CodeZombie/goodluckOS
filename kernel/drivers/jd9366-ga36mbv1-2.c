@@ -22,59 +22,18 @@
 #include <drm/drm_mipi_dsi.h>
 #include <drm/drm_panel.h>
 
-/*** Manufacturer Command Set ***/
-#define MCS_CMD_MODE_SW		0xFE /* CMD Mode Switch */
-#define MCS_CMD1_UCS		0x00 /* User Command Set (UCS = CMD1) */
-#define MCS_CMD2_P0		0x01 /* Manufacture Command Set Page0 (CMD2 P0) */
-#define MCS_CMD2_P1		0x02 /* Manufacture Command Set Page1 (CMD2 P1) */
-#define MCS_CMD2_P2		0x03 /* Manufacture Command Set Page2 (CMD2 P2) */
-#define MCS_CMD2_P3		0x04 /* Manufacture Command Set Page3 (CMD2 P3) */
-
-/* CMD2 P0 commands (Display Options and Power) */
-#define MCS_STBCTR		0x12 /* TE1 Output Setting Zig-Zag Connection */
-#define MCS_SGOPCTR		0x16 /* Source Bias Current */
-#define MCS_SDCTR		0x1A /* Source Output Delay Time */
-#define MCS_INVCTR		0x1B /* Inversion Type */
-#define MCS_EXT_PWR_IC		0x24 /* External PWR IC Control */
-#define MCS_SETAVDD		0x27 /* PFM Control for AVDD Output */
-#define MCS_SETAVEE		0x29 /* PFM Control for AVEE Output */
-#define MCS_BT2CTR		0x2B /* DDVDL Charge Pump Control */
-#define MCS_BT3CTR		0x2F /* VGH Charge Pump Control */
-#define MCS_BT4CTR		0x34 /* VGL Charge Pump Control */
-#define MCS_VCMCTR		0x46 /* VCOM Output Level Control */
-#define MCS_SETVGN		0x52 /* VG M/S N Control */
-#define MCS_SETVGP		0x54 /* VG M/S P Control */
-#define MCS_SW_CTRL		0x5F /* Interface Control for PFM and MIPI */
-
-/* CMD2 P2 commands (GOA Timing Control) - no description in datasheet */
-#define GOA_VSTV1		0x00
-#define GOA_VSTV2		0x07
-#define GOA_VCLK1		0x0E
-#define GOA_VCLK2		0x17
-#define GOA_VCLK_OPT1		0x20
-#define GOA_BICLK1		0x2A
-#define GOA_BICLK2		0x37
-#define GOA_BICLK3		0x44
-#define GOA_BICLK4		0x4F
-#define GOA_BICLK_OPT1		0x5B
-#define GOA_BICLK_OPT2		0x60
-#define MCS_GOA_GPO1		0x6D
-#define MCS_GOA_GPO2		0x71
-#define MCS_GOA_EQ		0x74
-#define MCS_GOA_CLK_GALLON	0x7C
-#define MCS_GOA_FS_SEL0		0x7E
-#define MCS_GOA_FS_SEL1		0x87
-#define MCS_GOA_FS_SEL2		0x91
-#define MCS_GOA_FS_SEL3		0x9B
-#define MCS_GOA_BS_SEL0		0xAC
-#define MCS_GOA_BS_SEL1		0xB5
-#define MCS_GOA_BS_SEL2		0xBF
-#define MCS_GOA_BS_SEL3		0xC9
-#define MCS_GOA_BS_SEL4		0xD3
-
-/* CMD2 P3 commands (Gamma) */
-#define MCS_GAMMA_VP		0x60 /* Gamma VP1~VP16 */
-#define MCS_GAMMA_VN		0x70 /* Gamma VN1~VN16 */
+#ifndef mipi_dsi_dcs_write_seq
+#define mipi_dsi_dcs_write_seq(dsi, cmd, seq...)                                    \
+	do {                                                                            \
+		static const u8 d[] = { cmd, seq };                                         \
+		int ret;                                                                    \
+		ret = mipi_dsi_dcs_write_buffer(dsi, d, ARRAY_SIZE(d));                     \
+		if (ret < 0) {                                                              \
+			dev_err(&dsi->dev, "dcs write failed (cmd 0x%02x): %d\n", cmd, ret);    \
+			return ret;                                                             \
+		}                                                                           \
+	} while (0)
+#endif
 
 struct jd9366 {
 	struct device *dev;
@@ -110,223 +69,191 @@ static inline struct jd9366 *panel_to_jd9366(struct drm_panel *panel)
 	return container_of(panel, struct jd9366, panel);
 }
 
-static int jd9366_dcs_write_buf(struct jd9366 *ctx, const void *data,
-				  size_t len)
+static int jd9366_verify_power_mode(struct mipi_dsi_device *dsi)
 {
-	struct mipi_dsi_device *dsi = to_mipi_dsi_device(ctx->dev);
-	int err;
+    u8 mode = 0;
+    int ret;
 
-	err = mipi_dsi_dcs_write_buffer(dsi, data, len);
-	if (err < 0)
-		return err;
+    ret = mipi_dsi_dcs_read(dsi, MIPI_DCS_GET_POWER_MODE, &mode, 1);
+    if (ret < 0) {
+        dev_err(&dsi->dev, "power mode readback failed: %d\n", ret);
+        return ret;
+    }
 
-	return 0;
+    /* Expect: display on (0x04), booster/DC-DC OK (0x80), not in sleep (0x10 clear) */
+    if ((mode & 0x04) == 0 || (mode & 0x80) == 0) {
+        dev_err(&dsi->dev, "panel reports bad power mode: 0x%02x\n", mode);
+        return -EIO;
+    }
+
+    return 0;
 }
 
-static int __maybe_unused jd9366_dcs_write_cmd(struct jd9366 *ctx, u8 cmd, u8 value)
+static int jd9366_init_sequence(struct mipi_dsi_device *dsi)
 {
-	struct mipi_dsi_device *dsi = to_mipi_dsi_device(ctx->dev);
-	int err;
-
-	err = mipi_dsi_dcs_write(dsi, cmd, &value, 1);
-	if (err < 0)
-		return err;
-
-	return 0;
-}
-
-#define dcs_write_seq(ctx, seq...) \
-	do { \
-		static const u8 d[] = { seq }; \
-		int __ret; \
-		\
-		__ret = jd9366_dcs_write_buf(ctx, d, ARRAY_SIZE(d)); \
-		if (__ret < 0) { \
-			dev_err(ctx->dev, \
-				"dcs write failed (cmd 0x%02x, %zu bytes): %d\n", \
-				d[0], ARRAY_SIZE(d), __ret); \
-			return __ret; \
-		} \
-	} while (0)
-
-#define dcs_write_cmd_seq(ctx, cmd, seq...) \
-	do { \
-		static const u8 d[] = { seq }; \
-		unsigned int i; \
-		int __ret; \
-		\
-		for (i = 0; i < ARRAY_SIZE(d); i++) { \
-			__ret = jd9366_dcs_write_cmd(ctx, cmd + i, d[i]); \
-			if (__ret < 0) { \
-				dev_err(ctx->dev, \
-					"dcs write failed (cmd 0x%02x): %d\n", \
-					cmd + i, __ret); \
-				return __ret; \
-			} \
-		} \
-	} while (0)
-
-static int jd9366_init_sequence(struct jd9366 *ctx)
-{
-    msleep(150);
     // Reverse-engineered from `lcd.ko` in the original GA36-MB v1.2's firmware via decompilation/static analysis.
 
     //Page 0
-    dcs_write_seq(ctx, 0xE0, 0x00);
+    mipi_dsi_dcs_write_seq(dsi, 0xE0, 0x00);
 
     // Password?
-    dcs_write_seq(ctx, 0xFF, 0x30);
-    dcs_write_seq(ctx, 0xFF, 0x52);
-    dcs_write_seq(ctx, 0xFF, 0x01);
+    mipi_dsi_dcs_write_seq(dsi, 0xFF, 0x30);
+    mipi_dsi_dcs_write_seq(dsi, 0xFF, 0x52);
+    mipi_dsi_dcs_write_seq(dsi, 0xFF, 0x01);
     // Page 0
-    dcs_write_seq(ctx, 0xE3, 0x00);
+    mipi_dsi_dcs_write_seq(dsi, 0xE3, 0x00);
     // ???
-    dcs_write_seq(ctx, 0x20, 0x90);
-    dcs_write_seq(ctx, 0x25, 0x10);
-    dcs_write_seq(ctx, 0x28, 0x6F);
-    dcs_write_seq(ctx, 0x29, 0x01);
-    dcs_write_seq(ctx, 0x2A, 0xDF);
-    dcs_write_seq(ctx, 0x30, 0x58);
-    dcs_write_seq(ctx, 0x37, 0x9C);
-    dcs_write_seq(ctx, 0x38, 0xA7);
-    dcs_write_seq(ctx, 0x39, 0x53);
-    dcs_write_seq(ctx, 0x44, 0x00);
-    dcs_write_seq(ctx, 0x49, 0x3C);
-    dcs_write_seq(ctx, 0x59, 0xFE);
-    dcs_write_seq(ctx, 0x5C, 0x00);
-    dcs_write_seq(ctx, 0x60, 0x8F);
-    dcs_write_seq(ctx, 0x80, 0x20);
-    dcs_write_seq(ctx, 0x91, 0x77);
-    dcs_write_seq(ctx, 0x92, 0x77);
-    dcs_write_seq(ctx, 0xA0, 0x55);
-    dcs_write_seq(ctx, 0xA1, 0x50);
-    dcs_write_seq(ctx, 0xA3, 0x58);
-    dcs_write_seq(ctx, 0xA4, 0x9C);
-    dcs_write_seq(ctx, 0xA7, 0x02);
-    dcs_write_seq(ctx, 0xA8, 0x01);
-    dcs_write_seq(ctx, 0xA9, 0x21);
-    dcs_write_seq(ctx, 0xAA, 0xFC);
-    dcs_write_seq(ctx, 0xAB, 0x28);
-    dcs_write_seq(ctx, 0xAC, 0x06);
-    dcs_write_seq(ctx, 0xAD, 0x06);
-    dcs_write_seq(ctx, 0xAE, 0x06);
-    dcs_write_seq(ctx, 0xAF, 0x03);
-    dcs_write_seq(ctx, 0xB0, 0x08);
-    dcs_write_seq(ctx, 0xB1, 0x26);
-    dcs_write_seq(ctx, 0xB2, 0x28);
-    dcs_write_seq(ctx, 0xB3, 0x28);
-    dcs_write_seq(ctx, 0xB4, 0x03);
-    dcs_write_seq(ctx, 0xB5, 0x08);
-    dcs_write_seq(ctx, 0xB6, 0x26);
-    dcs_write_seq(ctx, 0xB7, 0x08);
-    dcs_write_seq(ctx, 0xB8, 0x26);
-    dcs_write_seq(ctx, 0xFF, 0x30);
-    dcs_write_seq(ctx, 0xFF, 0x52);
-    dcs_write_seq(ctx, 0xFF, 0x02);
-    dcs_write_seq(ctx, 0xB0, 0x0B);
-    dcs_write_seq(ctx, 0xB1, 0x16);
-    dcs_write_seq(ctx, 0xB2, 0x17);
-    dcs_write_seq(ctx, 0xB3, 0x2C);
-    dcs_write_seq(ctx, 0xB4, 0x32);
-    dcs_write_seq(ctx, 0xB5, 0x3B);
-    dcs_write_seq(ctx, 0xB6, 0x29);
-    dcs_write_seq(ctx, 0xB7, 0x40);
-    dcs_write_seq(ctx, 0xB8, 0x0D);
-    dcs_write_seq(ctx, 0xB9, 0x05);
-    dcs_write_seq(ctx, 0xBA, 0x12);
-    dcs_write_seq(ctx, 0xBB, 0x10);
-    dcs_write_seq(ctx, 0xBC, 0x12);
-    dcs_write_seq(ctx, 0xBD, 0x15);
-    dcs_write_seq(ctx, 0xBE, 0x19);
-    dcs_write_seq(ctx, 0xBF, 0x0E);
-    dcs_write_seq(ctx, 0xC0, 0x16);
-    dcs_write_seq(ctx, 0xC1, 0x0A);
-    dcs_write_seq(ctx, 0xD0, 0x0C);
-    dcs_write_seq(ctx, 0xD1, 0x17);
-    dcs_write_seq(ctx, 0xD2, 0x14);
-    dcs_write_seq(ctx, 0xD3, 0x2E);
-    dcs_write_seq(ctx, 0xD4, 0x32);
-    dcs_write_seq(ctx, 0xD5, 0x3C);
-    dcs_write_seq(ctx, 0xD6, 0x22);
-    dcs_write_seq(ctx, 0xD7, 0x3D);
-    dcs_write_seq(ctx, 0xD8, 0x0D);
-    dcs_write_seq(ctx, 0xD9, 0x07);
-    dcs_write_seq(ctx, 0xDA, 0x13);
-    dcs_write_seq(ctx, 0xDB, 0x13);
-    dcs_write_seq(ctx, 0xDC, 0x11);
-    dcs_write_seq(ctx, 0xDD, 0x15);
-    dcs_write_seq(ctx, 0xDE, 0x19);
-    dcs_write_seq(ctx, 0xDF, 0x10);
-    dcs_write_seq(ctx, 0xE0, 0x17);
-    dcs_write_seq(ctx, 0xE1, 0x0A);
-    dcs_write_seq(ctx, 0xFF, 0x30);
-    dcs_write_seq(ctx, 0xFF, 0x52);
-    dcs_write_seq(ctx, 0xFF, 0x03);
-    dcs_write_seq(ctx, 0x00, 0x00);
-    dcs_write_seq(ctx, 0x01, 0x00);
-    dcs_write_seq(ctx, 0x02, 0x00);
-    dcs_write_seq(ctx, 0x03, 0x00);
-    dcs_write_seq(ctx, 0x04, 0x61);
-    dcs_write_seq(ctx, 0x05, 0x80);
-    dcs_write_seq(ctx, 0x06, 0xC7);
-    dcs_write_seq(ctx, 0x07, 0x01);
-    dcs_write_seq(ctx, 0x08, 0x82);
-    dcs_write_seq(ctx, 0x09, 0x83);
-    dcs_write_seq(ctx, 0x30, 0x00);
-    dcs_write_seq(ctx, 0x31, 0x00);
-    dcs_write_seq(ctx, 0x32, 0x00);
-    dcs_write_seq(ctx, 0x33, 0x00);
-    dcs_write_seq(ctx, 0x34, 0x61);
-    dcs_write_seq(ctx, 0x35, 0xC5);
-    dcs_write_seq(ctx, 0x36, 0x80);
-    dcs_write_seq(ctx, 0x37, 0x23);
-    dcs_write_seq(ctx, 0x40, 0x82);
-    dcs_write_seq(ctx, 0x41, 0x83);
-    dcs_write_seq(ctx, 0x42, 0x80);
-    dcs_write_seq(ctx, 0x43, 0x81);
-    dcs_write_seq(ctx, 0x44, 0x11);
-    dcs_write_seq(ctx, 0x45, 0xE2);
-    dcs_write_seq(ctx, 0x46, 0xE1);
-    dcs_write_seq(ctx, 0x47, 0x11);
-    dcs_write_seq(ctx, 0x48, 0xE4);
-    dcs_write_seq(ctx, 0x49, 0xE3);
-    dcs_write_seq(ctx, 0x50, 0x02);
-    dcs_write_seq(ctx, 0x51, 0x01);
-    dcs_write_seq(ctx, 0x52, 0x04);
-    dcs_write_seq(ctx, 0x53, 0x03);
-    dcs_write_seq(ctx, 0x54, 0x11);
-    dcs_write_seq(ctx, 0x55, 0xE6);
-    dcs_write_seq(ctx, 0x56, 0xE5);
-    dcs_write_seq(ctx, 0x57, 0x11);
-    dcs_write_seq(ctx, 0x58, 0xE8);
-    dcs_write_seq(ctx, 0x59, 0xE7);
-    dcs_write_seq(ctx, 0x7E, 0x08);
-    dcs_write_seq(ctx, 0x81, 0x0F);
-    dcs_write_seq(ctx, 0x84, 0x0C);
-    dcs_write_seq(ctx, 0x85, 0x0D);
-    dcs_write_seq(ctx, 0x86, 0x07);
-    dcs_write_seq(ctx, 0x87, 0x04);
-    dcs_write_seq(ctx, 0x88, 0x05);
-    dcs_write_seq(ctx, 0x89, 0x06);
-    dcs_write_seq(ctx, 0x8A, 0x00);
-    dcs_write_seq(ctx, 0x97, 0x0F);
-    dcs_write_seq(ctx, 0x9A, 0x0C);
-    dcs_write_seq(ctx, 0x9B, 0x0D);
-    dcs_write_seq(ctx, 0x9C, 0x07);
-    dcs_write_seq(ctx, 0x9D, 0x04);
-    dcs_write_seq(ctx, 0x9E, 0x05);
-    dcs_write_seq(ctx, 0x9F, 0x06);
-    dcs_write_seq(ctx, 0xA0, 0x00);
-    dcs_write_seq(ctx, 0xE0, 0x02);
-    dcs_write_seq(ctx, 0xE1, 0x52);
-    dcs_write_seq(ctx, 0xFF, 0x30);
-    dcs_write_seq(ctx, 0xFF, 0x52);
-    dcs_write_seq(ctx, 0xFF, 0x00);
-    dcs_write_seq(ctx, 0x36, 0x02);
+    mipi_dsi_dcs_write_seq(dsi, 0x20, 0x90);
+    mipi_dsi_dcs_write_seq(dsi, 0x25, 0x10);
+    mipi_dsi_dcs_write_seq(dsi, 0x28, 0x6F);
+    mipi_dsi_dcs_write_seq(dsi, 0x29, 0x01);
+    mipi_dsi_dcs_write_seq(dsi, 0x2A, 0xDF);
+    mipi_dsi_dcs_write_seq(dsi, 0x30, 0x58);
+    mipi_dsi_dcs_write_seq(dsi, 0x37, 0x9C);
+    mipi_dsi_dcs_write_seq(dsi, 0x38, 0xA7);
+    mipi_dsi_dcs_write_seq(dsi, 0x39, 0x53);
+    mipi_dsi_dcs_write_seq(dsi, 0x44, 0x00);
+    mipi_dsi_dcs_write_seq(dsi, 0x49, 0x3C);
+    mipi_dsi_dcs_write_seq(dsi, 0x59, 0xFE);
+    mipi_dsi_dcs_write_seq(dsi, 0x5C, 0x00);
+    mipi_dsi_dcs_write_seq(dsi, 0x60, 0x8F);
+    mipi_dsi_dcs_write_seq(dsi, 0x80, 0x20);
+    mipi_dsi_dcs_write_seq(dsi, 0x91, 0x77);
+    mipi_dsi_dcs_write_seq(dsi, 0x92, 0x77);
+    mipi_dsi_dcs_write_seq(dsi, 0xA0, 0x55);
+    mipi_dsi_dcs_write_seq(dsi, 0xA1, 0x50);
+    mipi_dsi_dcs_write_seq(dsi, 0xA3, 0x58);
+    mipi_dsi_dcs_write_seq(dsi, 0xA4, 0x9C);
+    mipi_dsi_dcs_write_seq(dsi, 0xA7, 0x02);
+    mipi_dsi_dcs_write_seq(dsi, 0xA8, 0x01);
+    mipi_dsi_dcs_write_seq(dsi, 0xA9, 0x21);
+    mipi_dsi_dcs_write_seq(dsi, 0xAA, 0xFC);
+    mipi_dsi_dcs_write_seq(dsi, 0xAB, 0x28);
+    mipi_dsi_dcs_write_seq(dsi, 0xAC, 0x06);
+    mipi_dsi_dcs_write_seq(dsi, 0xAD, 0x06);
+    mipi_dsi_dcs_write_seq(dsi, 0xAE, 0x06);
+    mipi_dsi_dcs_write_seq(dsi, 0xAF, 0x03);
+    mipi_dsi_dcs_write_seq(dsi, 0xB0, 0x08);
+    mipi_dsi_dcs_write_seq(dsi, 0xB1, 0x26);
+    mipi_dsi_dcs_write_seq(dsi, 0xB2, 0x28);
+    mipi_dsi_dcs_write_seq(dsi, 0xB3, 0x28);
+    mipi_dsi_dcs_write_seq(dsi, 0xB4, 0x03);
+    mipi_dsi_dcs_write_seq(dsi, 0xB5, 0x08);
+    mipi_dsi_dcs_write_seq(dsi, 0xB6, 0x26);
+    mipi_dsi_dcs_write_seq(dsi, 0xB7, 0x08);
+    mipi_dsi_dcs_write_seq(dsi, 0xB8, 0x26);
+
+    mipi_dsi_dcs_write_seq(dsi, 0xFF, 0x30);
+    mipi_dsi_dcs_write_seq(dsi, 0xFF, 0x52);
+    mipi_dsi_dcs_write_seq(dsi, 0xFF, 0x02);
+
+    mipi_dsi_dcs_write_seq(dsi, 0xB0, 0x0B);
+    mipi_dsi_dcs_write_seq(dsi, 0xB1, 0x16);
+    mipi_dsi_dcs_write_seq(dsi, 0xB2, 0x17);
+    mipi_dsi_dcs_write_seq(dsi, 0xB3, 0x2C);
+    mipi_dsi_dcs_write_seq(dsi, 0xB4, 0x32);
+    mipi_dsi_dcs_write_seq(dsi, 0xB5, 0x3B);
+    mipi_dsi_dcs_write_seq(dsi, 0xB6, 0x29);
+    mipi_dsi_dcs_write_seq(dsi, 0xB7, 0x40);
+    mipi_dsi_dcs_write_seq(dsi, 0xB8, 0x0D);
+    mipi_dsi_dcs_write_seq(dsi, 0xB9, 0x05);
+    mipi_dsi_dcs_write_seq(dsi, 0xBA, 0x12);
+    mipi_dsi_dcs_write_seq(dsi, 0xBB, 0x10);
+    mipi_dsi_dcs_write_seq(dsi, 0xBC, 0x12);
+    mipi_dsi_dcs_write_seq(dsi, 0xBD, 0x15);
+    mipi_dsi_dcs_write_seq(dsi, 0xBE, 0x19);
+    mipi_dsi_dcs_write_seq(dsi, 0xBF, 0x0E);
+    mipi_dsi_dcs_write_seq(dsi, 0xC0, 0x16);
+    mipi_dsi_dcs_write_seq(dsi, 0xC1, 0x0A);
+    mipi_dsi_dcs_write_seq(dsi, 0xD0, 0x0C);
+    mipi_dsi_dcs_write_seq(dsi, 0xD1, 0x17);
+    mipi_dsi_dcs_write_seq(dsi, 0xD2, 0x14);
+    mipi_dsi_dcs_write_seq(dsi, 0xD3, 0x2E);
+    mipi_dsi_dcs_write_seq(dsi, 0xD4, 0x32);
+    mipi_dsi_dcs_write_seq(dsi, 0xD5, 0x3C);
+    mipi_dsi_dcs_write_seq(dsi, 0xD6, 0x22);
+    mipi_dsi_dcs_write_seq(dsi, 0xD7, 0x3D);
+    mipi_dsi_dcs_write_seq(dsi, 0xD8, 0x0D);
+    mipi_dsi_dcs_write_seq(dsi, 0xD9, 0x07);
+    mipi_dsi_dcs_write_seq(dsi, 0xDA, 0x13);
+    mipi_dsi_dcs_write_seq(dsi, 0xDB, 0x13);
+    mipi_dsi_dcs_write_seq(dsi, 0xDC, 0x11);
+    mipi_dsi_dcs_write_seq(dsi, 0xDD, 0x15);
+    mipi_dsi_dcs_write_seq(dsi, 0xDE, 0x19);
+    mipi_dsi_dcs_write_seq(dsi, 0xDF, 0x10);
+    mipi_dsi_dcs_write_seq(dsi, 0xE0, 0x17);
+    mipi_dsi_dcs_write_seq(dsi, 0xE1, 0x0A);
+
+    mipi_dsi_dcs_write_seq(dsi, 0xFF, 0x30);
+    mipi_dsi_dcs_write_seq(dsi, 0xFF, 0x52);
+    mipi_dsi_dcs_write_seq(dsi, 0xFF, 0x03);
+
+    mipi_dsi_dcs_write_seq(dsi, 0x00, 0x00);
+    mipi_dsi_dcs_write_seq(dsi, 0x01, 0x00);
+    mipi_dsi_dcs_write_seq(dsi, 0x02, 0x00);
+    mipi_dsi_dcs_write_seq(dsi, 0x03, 0x00);
+    mipi_dsi_dcs_write_seq(dsi, 0x04, 0x61);
+    mipi_dsi_dcs_write_seq(dsi, 0x05, 0x80);
+    mipi_dsi_dcs_write_seq(dsi, 0x06, 0xC7);
+    mipi_dsi_dcs_write_seq(dsi, 0x07, 0x01);
+    mipi_dsi_dcs_write_seq(dsi, 0x08, 0x82);
+    mipi_dsi_dcs_write_seq(dsi, 0x09, 0x83);
+    mipi_dsi_dcs_write_seq(dsi, 0x30, 0x00);
+    mipi_dsi_dcs_write_seq(dsi, 0x31, 0x00);
+    mipi_dsi_dcs_write_seq(dsi, 0x32, 0x00);
+    mipi_dsi_dcs_write_seq(dsi, 0x33, 0x00);
+    mipi_dsi_dcs_write_seq(dsi, 0x34, 0x61);
+    mipi_dsi_dcs_write_seq(dsi, 0x35, 0xC5);
+    mipi_dsi_dcs_write_seq(dsi, 0x36, 0x80);
+    mipi_dsi_dcs_write_seq(dsi, 0x37, 0x23);
+    mipi_dsi_dcs_write_seq(dsi, 0x40, 0x82);
+    mipi_dsi_dcs_write_seq(dsi, 0x41, 0x83);
+    mipi_dsi_dcs_write_seq(dsi, 0x42, 0x80);
+    mipi_dsi_dcs_write_seq(dsi, 0x43, 0x81);
+    mipi_dsi_dcs_write_seq(dsi, 0x44, 0x11);
+    mipi_dsi_dcs_write_seq(dsi, 0x45, 0xE2);
+    mipi_dsi_dcs_write_seq(dsi, 0x46, 0xE1);
+    mipi_dsi_dcs_write_seq(dsi, 0x47, 0x11);
+    mipi_dsi_dcs_write_seq(dsi, 0x48, 0xE4);
+    mipi_dsi_dcs_write_seq(dsi, 0x49, 0xE3);
+    mipi_dsi_dcs_write_seq(dsi, 0x50, 0x02);
+    mipi_dsi_dcs_write_seq(dsi, 0x51, 0x01);
+    mipi_dsi_dcs_write_seq(dsi, 0x52, 0x04);
+    mipi_dsi_dcs_write_seq(dsi, 0x53, 0x03);
+    mipi_dsi_dcs_write_seq(dsi, 0x54, 0x11);
+    mipi_dsi_dcs_write_seq(dsi, 0x55, 0xE6);
+    mipi_dsi_dcs_write_seq(dsi, 0x56, 0xE5);
+    mipi_dsi_dcs_write_seq(dsi, 0x57, 0x11);
+    mipi_dsi_dcs_write_seq(dsi, 0x58, 0xE8);
+    mipi_dsi_dcs_write_seq(dsi, 0x59, 0xE7);
+    mipi_dsi_dcs_write_seq(dsi, 0x7E, 0x08);
+    mipi_dsi_dcs_write_seq(dsi, 0x81, 0x0F);
+    mipi_dsi_dcs_write_seq(dsi, 0x84, 0x0C);
+    mipi_dsi_dcs_write_seq(dsi, 0x85, 0x0D);
+    mipi_dsi_dcs_write_seq(dsi, 0x86, 0x07);
+    mipi_dsi_dcs_write_seq(dsi, 0x87, 0x04);
+    mipi_dsi_dcs_write_seq(dsi, 0x88, 0x05);
+    mipi_dsi_dcs_write_seq(dsi, 0x89, 0x06);
+    mipi_dsi_dcs_write_seq(dsi, 0x8A, 0x00);
+    mipi_dsi_dcs_write_seq(dsi, 0x97, 0x0F);
+    mipi_dsi_dcs_write_seq(dsi, 0x9A, 0x0C);
+    mipi_dsi_dcs_write_seq(dsi, 0x9B, 0x0D);
+    mipi_dsi_dcs_write_seq(dsi, 0x9C, 0x07);
+    mipi_dsi_dcs_write_seq(dsi, 0x9D, 0x04);
+    mipi_dsi_dcs_write_seq(dsi, 0x9E, 0x05);
+    mipi_dsi_dcs_write_seq(dsi, 0x9F, 0x06);
+    mipi_dsi_dcs_write_seq(dsi, 0xA0, 0x00);
+    mipi_dsi_dcs_write_seq(dsi, 0xE0, 0x02);
+    mipi_dsi_dcs_write_seq(dsi, 0xE1, 0x52);
+
+    mipi_dsi_dcs_write_seq(dsi, 0xFF, 0x30);
+    mipi_dsi_dcs_write_seq(dsi, 0xFF, 0x52);
+    mipi_dsi_dcs_write_seq(dsi, 0xFF, 0x00);
+    mipi_dsi_dcs_write_seq(dsi, 0x36, 0x02);
 
     // TE -- do we need this?????
-	// dcs_write_seq(ctx, 0x35,0x00);
-	return 0;
+    //mipi_dsi_dcs_write_seq(dsi, 0x35, 0x00);
+    return 0;
 }
 
 static int jd9366_disable(struct drm_panel *panel)
@@ -376,66 +303,111 @@ static int jd9366_unprepare(struct drm_panel *panel)
 
 static int jd9366_prepare(struct drm_panel *panel)
 {
-	struct jd9366 *ctx = panel_to_jd9366(panel);
-	struct mipi_dsi_device *dsi = to_mipi_dsi_device(ctx->dev);
-	int ret;
+    struct jd9366 *ctx = panel_to_jd9366(panel);
+    struct mipi_dsi_device *dsi = to_mipi_dsi_device(ctx->dev);
+    int ret = 0;
+    u8 mode = 0;
 
-	if (ctx->prepared)
-		return 0;
+    dev_info(panel->dev, "jd9366_prepare() starting...!");
 
-	ret = regulator_enable(ctx->supply);
-	if (ret < 0)
-		return ret;
+    if (ctx->prepared)
+        return 0;
 
-	msleep(120); // na
+    ret = regulator_enable(ctx->supply);
+    if (ret < 0) {
+        dev_info(panel->dev, "regulator_enable() failed: %d!", ret);
+        return ret;
+    }
 
-	if (ctx->reset_gpio) {
-		gpiod_set_value_cansleep(ctx->reset_gpio, 1);
-		msleep(120); //20
-		gpiod_set_value_cansleep(ctx->reset_gpio, 0);
-		msleep(120); //100
-	}
+    msleep(120);
 
-	ret = jd9366_init_sequence(ctx);
-	if (ret < 0) {
-		dev_err(ctx->dev, "panel init sequence failed: %d\n", ret);
-		regulator_disable(ctx->supply);
-		return ret;
-	}
+    regulator_disable(ctx->supply);
 
-	ret = mipi_dsi_dcs_exit_sleep_mode(dsi);
-	if (ret)
-		return ret;
+    msleep(900); //allow caps to settle.
 
-	msleep(125);
+    ret = regulator_enable(ctx->supply);
+    if (ret < 0) {
+        dev_info(panel->dev, "regulator_enable() failed: %d!", ret);
+        return ret;
+    }
 
-	ret = mipi_dsi_dcs_set_display_on(dsi);
-	if (ret)
-		return ret;
+    msleep(500);
 
-	msleep(20);
+    if (ctx->reset_gpio) {
+        // Reset twice. Probably not necessary, but it works :')
+        gpiod_set_value_cansleep(ctx->reset_gpio, 1);
+        msleep(150);
 
-	ctx->prepared = true;
+        gpiod_set_value_cansleep(ctx->reset_gpio, 0);
+        msleep(150);
 
-	return 0;
+        gpiod_set_value_cansleep(ctx->reset_gpio, 1);
+        msleep(150);
+
+        gpiod_set_value_cansleep(ctx->reset_gpio, 0);
+        msleep(150);
+    }
+
+    ret = jd9366_init_sequence(dsi);
+    if (ret < 0) {
+        dev_info(panel->dev, "panel init sequence failed: %d\n", ret);
+        return ret;
+    }
+
+    ret = mipi_dsi_dcs_exit_sleep_mode(dsi);
+    if (ret) {
+        dev_info(panel->dev, "mipi_dsi_dcs_exit_sleep_mode() failed: %d\n", ret);
+        return ret;
+    }
+
+    msleep(120);
+
+    ret = mipi_dsi_dcs_read(dsi, MIPI_DCS_GET_POWER_MODE, &mode, 1);
+    if (ret < 0) {
+        dev_info(panel->dev, "pre-init power mode readback failed: %d\n", ret);
+        return ret;
+    }
+
+    ret = mipi_dsi_dcs_set_display_on(dsi);
+    if (ret) {
+        dev_info(panel->dev, "mipi_dsi_dcs_set_display_on() failed: %d\n", ret);
+        return ret;
+    }
+
+    msleep(20);
+
+    for (int i = 0; i < 25; i++) {
+        ret = jd9366_verify_power_mode(dsi);
+        if (ret) {
+            dev_info(panel->dev, "jd9366_verify_power_mode() failed: %d\n", ret);
+            msleep(15);
+            continue;
+        }
+        break;
+    }
+    if (ret) {
+        return ret;
+    }
+
+
+    ctx->prepared = true;
+    return 0;
 }
 
 static int jd9366_enable(struct drm_panel *panel)
 {
 	struct jd9366 *ctx = panel_to_jd9366(panel);
 
-	if (ctx->enabled)
-		return 0;
+    if (ctx->enabled)
+        return 0;
 
-	backlight_enable(ctx->backlight);
-
-	ctx->enabled = true;
+    backlight_enable(ctx->backlight);
+    ctx->enabled = true;
 
 	return 0;
 }
 
-static int jd9366_get_modes(struct drm_panel *panel,
-			     struct drm_connector *connector)
+static int jd9366_get_modes(struct drm_panel *panel, struct drm_connector *connector)
 {
 	struct drm_display_mode *mode;
 
@@ -473,28 +445,28 @@ static int jd9366_probe(struct mipi_dsi_device *dsi)
 	struct jd9366 *ctx;
 	int ret;
 
-	ctx = devm_drm_panel_alloc(dev, struct jd9366, panel,
-				   &jd9366_drm_funcs, DRM_MODE_CONNECTOR_DPI);
-	if (IS_ERR(ctx))
-		return PTR_ERR(ctx);
+	dev_info(dev, "Starting probe...");
 
-	ctx->reset_gpio = devm_gpiod_get_optional(dev, "reset", GPIOD_OUT_LOW);
-	if (IS_ERR(ctx->reset_gpio)) {
-		ret = PTR_ERR(ctx->reset_gpio);
-		dev_err(dev, "cannot get reset GPIO: %d\n", ret);
-		return ret;
-	}
+    ctx = devm_drm_panel_alloc(dev, struct jd9366, panel, &jd9366_drm_funcs, DRM_MODE_CONNECTOR_DSI);
+    if (IS_ERR(ctx)) {
+        return PTR_ERR(ctx);
+    }
 
-	ctx->supply = devm_regulator_get(dev, "power");
-	if (IS_ERR(ctx->supply)) {
-		ret = PTR_ERR(ctx->supply);
-		dev_err(dev, "cannot get regulator: %d\n", ret);
-		return ret;
-	}
+    ctx->reset_gpio = devm_gpiod_get_optional(dev, "reset", GPIOD_OUT_LOW);
+    if (IS_ERR(ctx->reset_gpio)) {
+        return dev_err_probe(dev, PTR_ERR(ctx->reset_gpio), "cannot get reset GPIO\n");
+    }
 
-	ctx->backlight = devm_of_find_backlight(dev);
-	if (IS_ERR(ctx->backlight))
-		return PTR_ERR(ctx->backlight);
+    ctx->supply = devm_regulator_get(dev, "power");
+    if (IS_ERR(ctx->supply)) {
+        return dev_err_probe(dev, PTR_ERR(ctx->supply), "cannot get regulator\n");
+    }
+
+
+    ctx->backlight = devm_of_find_backlight(dev);
+    if (IS_ERR(ctx->backlight)) {
+        return dev_err_probe(dev, PTR_ERR(ctx->backlight), "cannot get backlight\n");
+    }
 
 	mipi_dsi_set_drvdata(dsi, ctx);
 

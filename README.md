@@ -13,16 +13,17 @@ As a result, unscrupulous scammers have decided to flood various marketplaces wi
 
 One such fake is the GA36-MB. 
 
-Instead of a RK3326 SoC and 1gb of ram, the GA36-MB uses an Allwinner A33 (or A23 in some cases) and 512mb of ram. You'd have a hard time detecting this, as the manufacturers have gone so far as to etch the official rockchip rk3326 markings onto the a33 chip. They've done the same on the ram as well. The device ships with a copy of Emuelec 4.7 masquerading as the community-favourite ArkOS, and system utils have even been modified to falsely report 1gb of ram when fetching system information.
+Instead of a RK3326 SoC and 1gb of ram, the GA36-MB uses an Allwinner A33 (or A23 in some cases) and 512mb of ram. You'd have a hard time detecting this though, as the manufacturers have gone so far as to etch the official rockchip rk3326 markings onto the a33 chip. They've done the same on the ram as well. The device ships with a copy of Emuelec 4.7 masquerading as the community-favourite ArkOS, and system utils have even been modified to falsely report 1gb of ram when fetching system information.
 
 The stock OS has many, many problems, and should be avoided at all costs. Most critically is the existence of an sd-card-mounted swap volume, which will prematurely kill any SD card you boot from.
 
 ## How Do I Install It?
-1. Download the latest `goodluckOS.zip` from the [https://releases.com[(Releases section on github)
-2. Extract it, 
-3. Flash it to a fresh microSD card of at least 1gb capacity.
+1. Download the latest `goodluckOS.zip` from [COMING SOON]
+2. Extract it
+3. Flash it to a microSD card of at least 1gb capacity with [Rufus](https://rufus.ie/en/), [balenaEtcher](https://etcher.balena.io/), [dd](https://man7.org/linux/man-pages/man1/dd.1.html), etc
 4. Plug the micro SD card into TF Slot 1 (TF1-OS) on your GA36-MB 
-5. Power it on.
+5. Power it on
+6. Wait for the auto-resize process to finish (the blue LED will turn on when it starts, and off when it's done) before powering off.
 
 ## How Do I Build It?
 GoodluckOS uses a novel four-step containerized build system featuring Buildroot. This means the OS can be configured and built extremely easily and portably, with no extra dependencies at all besides Docker and Docker Compose.

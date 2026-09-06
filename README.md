@@ -33,5 +33,5 @@ Take a look at [BUILD.MD](BUILD.md) for instructions and guidelines.
 ## LICENSE
 This project is licensed under the GNU GENERAL PUBLIC LICENSE VERSION 2.0 see the [LICENSE](LICENSE) file for details.
 
-## DISLAIMER
+## DISCLAIMER
 **WARNING**: The GNU General Public License v2 covers this in more detail, but to re-iterate: This software has the potential to permanently damage your hardware. You alone are responsible for _all_ damages, and the ensuing results of said damages, that may occur as a result of using, or attempting to use this software.

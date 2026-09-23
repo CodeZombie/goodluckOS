@@ -1,5 +1,5 @@
 # goodluckOS Kernel
-This is the goodluckOS kernel for the GA36-MB.
+This is the goodluckOS Linux kernel.
 
 ## Drivers
 Two drivers have been written via reverse-engineering to support the entirely undocumented Display and Gamepad peripherals.

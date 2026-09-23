@@ -23,15 +23,19 @@
 #include <drm/drm_panel.h>
 
 #ifndef mipi_dsi_dcs_write_seq
-#define mipi_dsi_dcs_write_seq(dsi, cmd, seq...)                                    \
-	do {                                                                            \
-		static const u8 d[] = { cmd, seq };                                         \
-		int ret;                                                                    \
-		ret = mipi_dsi_dcs_write_buffer(dsi, d, ARRAY_SIZE(d));                     \
-		if (ret < 0) {                                                              \
-			dev_err(&dsi->dev, "dcs write failed (cmd 0x%02x): %d\n", cmd, ret);    \
-			return ret;                                                             \
-		}                                                                           \
+#define mipi_dsi_dcs_write_seq(dsi, cmd, seq...)                                     \
+	do {                                                                             \
+		static const u8 d[] = { cmd, seq };                                          \
+		int ret;                                                                     \
+		ret = mipi_dsi_dcs_write_buffer(dsi, d, ARRAY_SIZE(d));                      \
+		if (ret < 0) {                                                               \
+			dev_err(&dsi->dev, "dcs write failed (cmd 0x%02x): %d\n", cmd, ret);     \
+			return ret;                                                              \
+		}                                                                            \
+		if (ret < ARRAY_SIZE(d)) {                                                   \
+		    dev_err(&dsi->dev, "dcs partial write: %d of %d\n", ret, ARRAY_SIZE(d)); \
+			return -EIO;                                                             \
+		}                                                                            \
 	} while (0)
 #endif
 
@@ -69,25 +73,6 @@ static inline struct jd9366 *panel_to_jd9366(struct drm_panel *panel)
 	return container_of(panel, struct jd9366, panel);
 }
 
-static int jd9366_verify_power_mode(struct mipi_dsi_device *dsi)
-{
-    u8 mode = 0;
-    int ret;
-
-    ret = mipi_dsi_dcs_read(dsi, MIPI_DCS_GET_POWER_MODE, &mode, 1);
-    if (ret < 0) {
-        dev_err(&dsi->dev, "power mode readback failed: %d\n", ret);
-        return ret;
-    }
-
-    /* Expect: display on (0x04), booster/DC-DC OK (0x80), not in sleep (0x10 clear) */
-    if ((mode & 0x04) == 0 || (mode & 0x80) == 0) {
-        dev_err(&dsi->dev, "panel reports bad power mode: 0x%02x\n", mode);
-        return -EIO;
-    }
-
-    return 0;
-}
 
 static int jd9366_init_sequence(struct mipi_dsi_device *dsi)
 {
@@ -251,6 +236,12 @@ static int jd9366_init_sequence(struct mipi_dsi_device *dsi)
     mipi_dsi_dcs_write_seq(dsi, 0xFF, 0x00);
     mipi_dsi_dcs_write_seq(dsi, 0x36, 0x02);
 
+    // Not sure if these are necessary, or just duplicates of `gpiod_set_value_cansleep` in `prepare`
+    mipi_dsi_dcs_write_seq(dsi, 0x11);
+    msleep(120);
+    mipi_dsi_dcs_write_seq(dsi, 0x29);
+    msleep(20);
+
     // TE -- do we need this?????
     //mipi_dsi_dcs_write_seq(dsi, 0x35, 0x00);
     return 0;
@@ -305,92 +296,43 @@ static int jd9366_prepare(struct drm_panel *panel)
 {
     struct jd9366 *ctx = panel_to_jd9366(panel);
     struct mipi_dsi_device *dsi = to_mipi_dsi_device(ctx->dev);
-    int ret = 0;
-    u8 mode = 0;
+    int ret;
 
-    dev_info(panel->dev, "jd9366_prepare() starting...!");
-
-    if (ctx->prepared)
+    if (ctx->prepared) {
+        dev_info(panel->dev, "Panel already prepared. Exiting early.\n");
         return 0;
+    }
 
     ret = regulator_enable(ctx->supply);
-    if (ret < 0) {
-        dev_info(panel->dev, "regulator_enable() failed: %d!", ret);
-        return ret;
-    }
+    if (ret < 0) return ret;
 
     msleep(120);
-
-    regulator_disable(ctx->supply);
-
-    msleep(900); //allow caps to settle.
-
-    ret = regulator_enable(ctx->supply);
-    if (ret < 0) {
-        dev_info(panel->dev, "regulator_enable() failed: %d!", ret);
-        return ret;
-    }
-
-    msleep(500);
 
     if (ctx->reset_gpio) {
-        // Reset twice. Probably not necessary, but it works :')
         gpiod_set_value_cansleep(ctx->reset_gpio, 1);
-        msleep(150);
+        usleep_range(10000, 15000);
 
         gpiod_set_value_cansleep(ctx->reset_gpio, 0);
-        msleep(150);
-
-        gpiod_set_value_cansleep(ctx->reset_gpio, 1);
-        msleep(150);
-
-        gpiod_set_value_cansleep(ctx->reset_gpio, 0);
-        msleep(150);
+        msleep(120);
     }
 
-    ret = jd9366_init_sequence(dsi);
-    if (ret < 0) {
-        dev_info(panel->dev, "panel init sequence failed: %d\n", ret);
-        return ret;
-    }
+    jd9366_init_sequence(dsi);
+
 
     ret = mipi_dsi_dcs_exit_sleep_mode(dsi);
-    if (ret) {
-        dev_info(panel->dev, "mipi_dsi_dcs_exit_sleep_mode() failed: %d\n", ret);
-        return ret;
-    }
+    dev_info(panel->dev, "mipi_dsi_dcs_exit_sleep_mode() finished: %d\n", ret);
+    if (ret) return ret;
 
-    msleep(120);
-
-    ret = mipi_dsi_dcs_read(dsi, MIPI_DCS_GET_POWER_MODE, &mode, 1);
-    if (ret < 0) {
-        dev_info(panel->dev, "pre-init power mode readback failed: %d\n", ret);
-        return ret;
-    }
 
     ret = mipi_dsi_dcs_set_display_on(dsi);
-    if (ret) {
-        dev_info(panel->dev, "mipi_dsi_dcs_set_display_on() failed: %d\n", ret);
-        return ret;
-    }
+    dev_info(panel->dev, "mipi_dsi_dcs_set_display_on() finished: %d\n", ret);
+    if (ret) return ret;
 
     msleep(20);
 
-    for (int i = 0; i < 25; i++) {
-        ret = jd9366_verify_power_mode(dsi);
-        if (ret) {
-            dev_info(panel->dev, "jd9366_verify_power_mode() failed: %d\n", ret);
-            msleep(15);
-            continue;
-        }
-        break;
-    }
-    if (ret) {
-        return ret;
-    }
-
-
     ctx->prepared = true;
+    dev_info(panel->dev, "jd9366_prepare() SUCCESS.\n");
+
     return 0;
 }
 
@@ -444,6 +386,7 @@ static int jd9366_probe(struct mipi_dsi_device *dsi)
 	struct device *dev = &dsi->dev;
 	struct jd9366 *ctx;
 	int ret;
+	u8 mode;
 
 	dev_info(dev, "Starting probe...");
 
@@ -462,15 +405,13 @@ static int jd9366_probe(struct mipi_dsi_device *dsi)
         return dev_err_probe(dev, PTR_ERR(ctx->supply), "cannot get regulator\n");
     }
 
-
     ctx->backlight = devm_of_find_backlight(dev);
     if (IS_ERR(ctx->backlight)) {
         return dev_err_probe(dev, PTR_ERR(ctx->backlight), "cannot get backlight\n");
     }
 
+    ctx->dev = dev;
 	mipi_dsi_set_drvdata(dsi, ctx);
-
-	ctx->dev = dev;
 
 	dsi->lanes = 2;
 	dsi->format = MIPI_DSI_FMT_RGB888;
@@ -478,6 +419,61 @@ static int jd9366_probe(struct mipi_dsi_device *dsi)
 
 	ctx->panel.prepare_prev_first = true;
 
+	ret = regulator_enable(ctx->supply);
+	if (ret < 0)
+		return ret;
+
+	msleep(20);
+
+	if (ctx->reset_gpio) {
+		gpiod_set_value_cansleep(ctx->reset_gpio, 1);
+		msleep(10);
+		gpiod_set_value_cansleep(ctx->reset_gpio, 0);
+		msleep(20);
+	}
+
+	// This is a hack which initializes the DCS bus so we can probe the display to see if
+	// it'll turn on or not.
+	// In my testing this has reliably predicted whether or not the display will actually initialize.
+	//
+	// We want to check this here so that we can defer probing so the device doesn't think the doomed DCS bus
+	// is ready and register a panel it can't communicate with. If that happens, we get massively long DCS timeouts
+	// which causes the device to take 2+ minutes to get into userspace, which isn't very cool.
+	ret = mipi_dsi_dcs_read(dsi, MIPI_DCS_GET_POWER_MODE, &mode, 1);
+	if (ret < 0) {
+	    int probe_success = 0;
+	    int i = 0;
+		for (i=0; i<4; i++) {
+
+		    regulator_disable(ctx->supply);
+			msleep(20);
+            regulator_enable(ctx->supply);
+            msleep(20);
+            if (ctx->reset_gpio) {
+    			gpiod_set_value_cansleep(ctx->reset_gpio, 1);
+    			msleep(20);
+    			gpiod_set_value_cansleep(ctx->reset_gpio, 0);
+                msleep(20);
+    		}
+            ret = mipi_dsi_dcs_read(dsi, MIPI_DCS_GET_POWER_MODE, &mode, 1);
+            if (ret < 0) {
+                continue;
+            }
+            probe_success = 1;
+		}
+
+		if (probe_success == 0) {
+		    // stick a very-identifiable flag in the kernel logs so we can identify this failure state in userspace.
+    		dev_err(dev, "XXGOODLUCKOSHACK::MIPI_DSI_PROBE_READ::%d\n", ret);
+    		if (ctx->reset_gpio)
+    			gpiod_set_value_cansleep(ctx->reset_gpio, 1);
+    		regulator_disable(ctx->supply);
+    		return -ENODEV;
+		}
+	}
+
+	// If we make it to this point, the display will initialize.
+	ctx->panel.prepare_prev_first = true;
 	drm_panel_add(&ctx->panel);
 
 	ret = mipi_dsi_attach(dsi);

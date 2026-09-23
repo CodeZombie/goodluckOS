@@ -7,13 +7,13 @@
 PUPPY_SITE = $(PUPPY_PKGDIR)
 PUPPY_SITE_METHOD = local
 
-PUPPY_DEPENDENCIES = sdl2 sdl2_image sdl2_ttf sdl2_gfx
+PUPPY_DEPENDENCIES = sdl2 sdl2_image sdl2_ttf
 
 define PUPPY_BUILD_CMDS
 	$(TARGET_CXX) $(TARGET_CXXFLAGS) \
 		-o $(@D)/puppy $(@D)/puppy.cpp \
 		$(TARGET_LDFLAGS) \
-		-lpthread -lSDL2 -lSDL2_image -lSDL2_ttf -lSDL2_gfx
+		-lpthread -lSDL2 -lSDL2_image -lSDL2_ttf
 endef
 
 define PUPPY_INSTALL_TARGET_CMDS

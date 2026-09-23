@@ -45,13 +45,13 @@ umount /
 EOF
 
 # # Inject custom bootlogo
-# COPY res/goodluck_bootlogo.bmp ./goodluck_bootlogo.bmp
-# RUN guestfish -a goodluck.img <<EOF
-# run
-# mount-vfs "offset=37748736" "vfat" /dev/sda /
-# upload goodluck_bootlogo.bmp /bootlogo.bmp
-# umount /
-# EOF
+COPY res/goodluck_bootlogo.bmp ./goodluck_bootlogo.bmp
+RUN guestfish -a goodluck.img <<EOF
+run
+mount-vfs "offset=37748736" "vfat" /dev/sda /
+upload goodluck_bootlogo.bmp /bootlogo.bmp
+umount /
+EOF
 
 FROM scratch AS export
 COPY --from=builder /workspace/goodluck.img /

@@ -1,0 +1,10 @@
+config BR2_PACKAGE_ARE_YOU_SURE
+	bool "are-you-sure"
+	depends on BR2_INSTALL_LIBSTDCPP
+	select BR2_PACKAGE_SDL2
+	select BR2_PACKAGE_IMGUI
+	help
+	  Are You Sure Script Launcher Application
+
+comment "are-you-sure needs a toolchain w/ C++"
+	depends on !BR2_INSTALL_LIBSTDCPP

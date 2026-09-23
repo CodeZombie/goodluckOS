@@ -1,5 +1,9 @@
 menu "goodluckOS Custom Packages"
+source "../package/imgui/Config.in"
 source "../package/retroarch/Config.in"
 source "../package/libretro-cores/Config.in"
 source "../package/puppy/Config.in"
+source "../package/are-you-sure/Config.in"
+source "../package/system-settings/Config.in"
+source "../package/resize-home/Config.in"
 endmenu

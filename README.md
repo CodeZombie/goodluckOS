@@ -1,36 +1,113 @@
 # goodluckOS
-An operating system for victims of fraud.
+An uncompromisingly fast, small, modern, and feature-rich custom firmware for A23/A33-based handheld consoles.
 
-## What Is This?
-GoodluckOS is a custom GNU/Linux firmware for the GA36-MB handheld emulator. It's been built from scratch using a novel containerized buildroot, some custom C/C++/SDL2 userspace software, a few reverse-engineered kernel drivers, and a meticulously crafted custom device tree.
+## Features
+- Mainline Linux 7.2
+- Everything compiled from scratch with the best optimization flags for the hardware
+- Optimzied for performance. No systemd, no unecessary background processes, no x11/wayland
+- Significantly smaller and faster than the stock firmware
+- Boots in 10 seconds (stock firmware takes 50)
+- Can be flashed to a 1gb SD card and still give you over 500mb of free space for games
+- ZRAM enabled by default
+- Hardware accelerated graphics
+- Speaker audio
+- Great battery life
+- No swap on SD card (massively improves the life of your card over the stock f/w)
+- FN+Vol buttons adjust the screen brightness from anywhere
+- FN+START+SELECT kills the active application, bringing you right back to the launcher
+- If the screen is on, the LEDs are off. Nothing blinding you while you're playing in the dark
+- Comes stock with Chocolate Doom, ready to play
+- Comes stock with Retroarch and several optimized cores (PCSX-ReArmed, Snes9x, QuickNES, DOSbox)
+- Games perform very well. Metal Gear Solid 1 is completely playable at reasonable framerates
+- Comes with a custom, optimized launcher application
+- Autostart any application on boot, including games or a front-end like EmulationStation (coming soon)
+- USB terminal access for remote debugging. Log in with `sudo screen /dev/ttyACM* 115200` and `root:root`
+- Half Life 1 ported and playable: [Get It Here](https://github.com/CodeZombie/glOSports-half-life)
 
-The result is a highly efficient, optimized, and modern linux 7.2 kernel running highly optimized software, specifically chosen to give users enough functionality to play all the games they want, but without any unecessary slowdowns or bloat.
+### Features In Development
+- Portmaster (or equivalent)
+- EmulationStation
+- USB Networking
+- Headphone support
+- GA36-MB TF-2 support (If the hardware supports it)
+- Mount device storage via USB
+- CPU overclocking
 
-## What Is A GA36-MB?
-The r36s is an extremely popular, cheap, and fairly powerful handheld gaming console. It runs linux, it has a massive open source community supporting it, it has thousands of games ported to it, along with thousands more available through emulators. It's like 40 bucks. If you want to play games and don't want to spend much, it's the obvious choice, and a lot of people buy it.
+## Supported Devices
+- GA36-MB v1.2
+- GA36-MB v1.1
 
-As a result, unscrupulous scammers have decided to flood various marketplaces with knockoffs (or "fakes" as they've come to be known in the r36s community). These fakes are often visually indistinguishable from the a genuine device, and feature significantly worse hardware and software support.
+#### Coming Soon:
+- GA36-MB v1.0
+- F35v
+- Other A23/A33-based devices
 
-One such fake is the GA36-MB. 
+Know of another Allwinner-based handheld not listed on this page? Open a new [Issue](https://github.com/CodeZombie/goodluckOS/issues) and let me know!
 
-Instead of a RK3326 SoC and 1gb of ram, the GA36-MB uses an Allwinner A33 (or A23 in some cases) and 512mb of ram. You'd have a hard time detecting this, as the manufacturers have gone so far as to etch the official rockchip rk3326 markings onto the a33 chip. They've done the same on the ram as well. The device ships with a copy of Emuelec 4.7 masquerading as the community-favourite ArkOS, and system utils have even been modified to falsely report 1gb of ram when fetching system information.
+Consider contributing to the [Device Fund](https://ko-fi.com/jeremyclark) so I can purchase new consoles and port goodluckOS to them.
 
-The stock OS has many, many problems, and should be avoided at all costs. Most critically is the existence of an sd-card-mounted swap volume, which will prematurely kill any SD card you boot from.
+## Puppy
+Puppy is goodluckOS' application launcher. It's what you see when you start goodluckOS.
 
-## How Do I Install It?
-1. Download the latest `goodluckOS.zip` from the [https://releases.com[(Releases section on github)
-2. Extract it, 
-3. Flash it to a fresh microSD card of at least 1gb capacity.
-4. Plug the micro SD card into TF Slot 1 (TF1-OS) on your GA36-MB 
+It starts up fast, uses very little power, launches applications instantly, and uses zero RAM and CPU after launching an application.
+
+Puppy uses a ini-formatted `apps.puppy` files to populate it's application list. 
+
+Add a new entry by modifying the `apps.puppy` file in your HOME partition. Take a look at the comments at the top of that file for syntax/examples
+
+## What's wrong with the stock firmware?
+Stock firmware:
+- Based on ancient, unsupported forks of thelinux kernel version 3.4.
+- Messy file system, hard to customize, even harder to clean.
+- Full of broken/incompatible files.
+- Come with inefficient, out-of-date emulator cores.
+- Software often not compiled with optimal compiler flags.
+- Usually uses swap-on-sd card, which will prematurely kill your expensive microSD card.
+- Slow boot time
+- Bad/no hotkeys
+- Can't be flashed to smaller SD cards.
+- The MBR (at least on the GA36-MB) is broken by default. You can't add games unless you manually fix it with my [guide](https://gist.github.com/CodeZombie/83be58b000ee6a14c7b91a6027a8eedf)
+
+## How Do I Install goodluckOS?
+1. Download the latest `goodluckOS.zip` from [Releaases](https://github.com/CodeZombie/goodluckOS/releases)
+2. Extract it
+3. Flash it to a microSD card of at least 1gb capacity with [balenaEtcher](https://etcher.balena.io/), [Rufus (in DD mode)](https://rufus.ie/en/), [dd](https://man7.org/linux/man-pages/man1/dd.1.html), etc
+4. Plug the micro SD card into TF Slot 1 (TF1-OS) on your GA36-MB
 5. Power it on.
+6. [optional] Select the `Resize Home` application in the launcher to expand your HOME partition to fill all the remaining space on your SD card. You only need to do this once.
+
+## How do I add games?
+Plug the SD card into your PC and open up the HOME partition. In there you'll find a `roms` folder with a few subfolders for each system. Add your roms to those.
+
+To add custom art to Puppy, add an image file into the `icons` folder in your rom folder with the same name as the rom file. (eg. if your game is `roms/snes/super-mario.smc`, your image would be `roms/snes/icons/super-mario.png`)
+
+### Can I add my own archives?
+You sure can!
+
+To add a new emulator, find an appropriate armhf libretro core .so file. Add it to either:
+1. The `/usr/lib/libretro` folder in the `linux` partition, or
+2. Anywhere in your HOME partition
+
+Then modify `HOME -> apps.puppy` with a new `[ARCHIVE]` entry, pointing the COMMAND to your new libretro core. Take a look at `HOME -> apps.puppy` for an exmaple.
+
+## Does goodluckOS come with any games?
+Only prBoom with a shareware copy of Doom. However I haven't been able to figure our prBoom's cryptic controller scheme yet so it's not exactly playable, but you can watch the demo :). (If you know how to get this working please make an MR I have spent hours on this and I cannot figure it out and I'm at the end of my rope.)
+
+goodluckOS will never be distributed with unauthorized copyright protected materials. If you own the copyright to any games or demos (or know of any permissively-licensed/CC games) that you think might make a good fit, please open an Issue! I'd love to include some high quality games with the OS by default.
+
+## About Ports
+Some subset of portmaster games could theoretically work, however I want to tamper your expectations a little bit before we all start getting too excited.
+The Allwinner A23/A33 is a 32-bit SoC. This means that 64-bit software simply _cannot_ run on it. There are a number of popular android ports that exist only as aarch64 (64-bit) distributions. Those will never work. Additionally, even with ZRAM there, the device is still heavily RAM-limited, so unoptimized games (I'm looking at you, Balatro) will struggle to run without patching.
+
+With that said, most of the games people actually care about (Stardew Valley, Half-Life 1, n64 re-comps, Android GameMaker games, OpenMW, OpenRCT2, + more) are 32-bit games, and therefore should theoretically work if anyone cares to create 32-bit ports.
 
 ## How Do I Build It?
-GoodluckOS uses a novel four-step containerized build system featuring Buildroot. This means the OS can be configured and built extremely easily and portably, with no extra dependencies at all besides Docker and Docker Compose.
+GoodluckOS uses a novel four-step containerized build system featuring Buildroot. This means the OS can be configured and built extremely easily and portably with no extra dependencies at all besides Docker and Docker Compose (or Podman).
 
 Take a look at [BUILD.MD](BUILD.md) for instructions and guidelines.
 
 ## LICENSE
 This project is licensed under the GNU GENERAL PUBLIC LICENSE VERSION 2.0 see the [LICENSE](LICENSE) file for details.
 
-## DISLAIMER
-**WARNING**: The GNU General Public License v2 covers this in more detail, but to re-iterate: This software has the potential to permanently damage your hardware. You alone are responsible for _all_ damages, and the ensuing results of said damages, that may occur as a result of using, or attempting to use this software.
+## DISCLAIMER
+**WARNING**: The GNU General Public License v2 covers this in more detail, but to re-iterate: This software has the potential to permanently damage your hardware. You alone are responsible for _all_ damages, and the ensuing results of said damages that may occur as a result of using, or attempting to use this software.

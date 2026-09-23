@@ -1,7 +1,7 @@
 #
 # Automatically generated make config: don't edit
 # Busybox version: 1.38.0
-# Sun Aug 30 02:08:23 2026
+# Tue Sep  8 02:53:16 2026
 #
 CONFIG_HAVE_DOT_CONFIG=y
 
@@ -720,7 +720,7 @@ CONFIG_SWITCH_ROOT=y
 CONFIG_UEVENT=y
 CONFIG_UMOUNT=y
 CONFIG_FEATURE_UMOUNT_ALL=y
-# CONFIG_UNSHARE is not set
+CONFIG_UNSHARE=y
 CONFIG_UUIDGEN=y
 # CONFIG_WALL is not set
 

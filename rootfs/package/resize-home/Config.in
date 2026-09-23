@@ -1,0 +1,10 @@
+config BR2_PACKAGE_RESIZE_HOME
+	bool "resize-home"
+	depends on BR2_INSTALL_LIBSTDCPP
+	select BR2_PACKAGE_SDL2
+	select BR2_PACKAGE_IMGUI
+	help
+	  System Settings Application
+
+comment "resize-home needs a toolchain w/ C++"
+	depends on !BR2_INSTALL_LIBSTDCPP

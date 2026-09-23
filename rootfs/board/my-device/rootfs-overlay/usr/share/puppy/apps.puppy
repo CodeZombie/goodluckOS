@@ -1,0 +1,104 @@
+[ENTRY]
+CATEGORY=System
+NAME=Reboot
+DESCRIPTION=Reboot the device
+COMMAND=are-you-sure "Are you sure you want to reboot the device?" "sync && doas -n /sbin/reboot -f"
+ICON=/usr/share/icons/reboot.png
+
+[ENTRY]
+CATEGORY=System
+NAME=Power Off
+DESCRIPTION=Power off the device
+COMMAND=are-you-sure "Are you sure you want to power off the device?" "sync && doas -n /sbin/poweroff -f"
+ICON=/usr/share/icons/poweroff.png
+
+[ENTRY]
+CATEGORY=System
+NAME=System Settings
+DESCRIPTION=Modify your system's settings
+COMMAND=system-settings
+ICON=/usr/share/icons/system-settings.png
+
+[ENTRY]
+CATEGORY=System
+NAME=Rezize Home
+DESCRIPTION=Resize your HOME partition
+COMMAND=resize-home
+ICON=/usr/share/icons/resize-home.png
+
+[ENTRY]
+CATEGORY=Emulators/Frontends
+NAME=RetroArch
+Description=A frontend for emulators, game engines and media players
+COMMAND=retroarch
+ICON=/usr/share/icons/retroarch.png
+
+[ENTRY]
+CATEGORY=Games
+NAME=Chocolate Doom
+DESCRIPTION=It's Doom.
+COMMAND=chocolate-doom
+ICON=/usr/share/icons/chocolate-doom.png
+
+[ARCHIVE]
+NAME=Playstation
+Description=Sony Playstation
+ENTRY_DIRECTORIES=/home/player/roms/psx
+ENTRY_EXTENSIONS=bin;psx
+ENTRY_ICONS_DIRECTORIES=/home/player/roms/psx/icons
+DEFAULT_ICON=/usr/share/icons/psx.png
+COMMAND=retroarch -L /usr/lib/libretro/pcsx_rearmed_libretro.so %s
+
+[ARCHIVE]
+NAME=Game Boy (Color)
+Description=Game Boy / Game Boy Color
+ENTRY_DIRECTORIES=/home/player/roms/gbc
+ENTRY_EXTENSIONS=gbc
+ENTRY_ICONS_DIRECTORIES=/home/player/roms/gbc/icons
+DEFAULT_ICON=/usr/share/icons/gbc.png
+COMMAND=retroarch -L /usr/lib/libretro/gambatte_libretro.so %s
+
+[ARCHIVE]
+NAME=Super Nintendo
+Description=SNES (Super Nintendo Entertainment System)
+ENTRY_DIRECTORIES=/home/player/roms/snes
+ENTRY_EXTENSIONS=sfc;smc;
+ENTRY_ICONS_DIRECTORIES=/home/player/roms/snes/icons
+DEFAULT_ICON=/usr/share/icons/snes.png
+COMMAND=retroarch -L /usr/lib/libretro/snes9x2005_libretro.so %s
+
+[ARCHIVE]
+NAME=Game Boy Advance
+Description=GBA (Game Boy Advance)
+ENTRY_DIRECTORIES=/home/player/roms/gba
+ENTRY_EXTENSIONS=gba
+ENTRY_ICONS_DIRECTORIES=/home/player/roms/gba/icons
+DEFAULT_ICON=/usr/share/icons/gba.png
+COMMAND=retroarch -L /usr/lib/libretro/mgba_libretro.so %s
+
+[ARCHIVE]
+NAME=Nintendo Entertainment System
+Description=NES (Nintendo Entertainment System)
+ENTRY_DIRECTORIES=/home/player/roms/nes
+ENTRY_EXTENSIONS=nes;fds;unf;unif;
+ENTRY_ICONS_DIRECTORIES=/home/player/roms/nes/icons
+DEFAULT_ICON=/usr/share/icons/nes.png
+COMMAND=retroarch -L /usr/lib/libretro/fceumm_libretro.so %s
+
+[ARCHIVE]
+NAME=DOSBox
+Description=DOS
+ENTRY_DIRECTORIES=/home/player/roms/dos
+ENTRY_EXTENSIONS=exe;com;bat;conf;
+ENTRY_ICONS_DIRECTORIES=/home/player/roms/dos/icons
+DEFAULT_ICON=/usr/share/icons/dos.png
+COMMAND=retroarch -L /usr/lib/libretro/dosbox_libretro.so %s
+
+[ARCHIVE]
+NAME=Doom
+Description=Doom WADs
+ENTRY_DIRECTORIES=/home/player/roms/doom
+ENTRY_EXTENSIONS=wad;iwad;
+ENTRY_ICONS_DIRECTORIES=/home/player/roms/doom/icons
+DEFAULT_ICON=/usr/share/icons/chocolate-doom.png
+COMMAND=chocolate-doom -iwad %s

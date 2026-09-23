@@ -1,0 +1,2 @@
+# <name>                               <type> <mode> <uid>  <gid>  <major> <minor> <start> <inc> <count>
+/etc/player-flags                        d      750   player player   -       -       -       -     -

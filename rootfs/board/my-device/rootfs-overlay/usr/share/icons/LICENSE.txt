@@ -1,3 +1,0 @@
-The following icon files are public domain and have been sourced from https://github.com/apancik/public-domain-icons
-    - reboot.png
-    - shutdown.png

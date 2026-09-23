@@ -4,17 +4,12 @@ DISK=/dev/mmcblk0
 PART=/dev/mmcblk0p2
 PART_NUM=2
 MOUNT_POINT=/home/player
-DONE_FLAG=/etc/.home_resized
-LOG=/var/log/resize-home.log
-SEED_BACKUP=/tmp/home_seed_backup.tar
+REQUEST_FLAG=/etc/player-flags/.home_resize_requested
+STATUS_FILE=/etc/player-flags/.home_resize_status
+HOME_BACKUP=/tmp/home_backup.tar
 CONSOLE=/dev/tty1
-
-: > "$LOG"
-
-log() {
-    echo "$@" >> "$LOG"
-    ( timeout 1 sh -c "echo \"\$1\" > \"$CONSOLE\"" _ "$*" ) 2>/dev/null &
-}
+LED_PATH=/sys/class/leds/blue:status/brightness
+LOG=/var/log/resize-home.log
 
 is_number() {
     case "$1" in
@@ -23,13 +18,57 @@ is_number() {
     esac
 }
 
+log() {
+    echo "$@" >> "$LOG"
+    ( timeout 1 sh -c "echo \"\$1\" > \"$CONSOLE\"" _ "$*" ) 2>/dev/null &
+}
+
+: > "$LOG"
 log "-- resize-home: $(date) --"
 
-log "checking for flag at: $DONE_FLAG"
-if [ -e "$DONE_FLAG" ]; then
-    log "already done. exiting"
+if [ ! -e "$REQUEST_FLAG" ]; then
+    log "no request flag at $REQUEST_FLAG - nothing to do"
     exit 0
 fi
+
+log "request flag found:"
+cat "$REQUEST_FLAG" >> "$LOG" 2>/dev/null
+
+exit_handler() {
+    rc=$?
+
+    if [ "$rc" -ne 0 ]; then
+        {
+            echo "result=failed"
+            echo "rc=$rc"
+            echo "time=$(date)"
+            echo "log=$LOG"
+        } > "$STATUS_FILE"
+        for i in 1 2 3 4 5; do
+            echo "1" > "$LED_PATH" 2>/dev/null
+            sleep 0.2
+            echo "0" > "$LED_PATH" 2>/dev/null
+            sleep 0.2
+        done
+    else
+        {
+            echo "result=success"
+            echo "time=$(date)"
+            echo "log=$LOG"
+        } > "$STATUS_FILE"
+        echo "0" > "$LED_PATH" 2>/dev/null
+    fi
+
+    exit "$rc"
+}
+trap exit_handler EXIT
+
+log "deleting request flag file..."
+rm -f "$REQUEST_FLAG"
+sync
+log "request flag file deleted."
+
+echo "1" > "$LED_PATH" 2>/dev/null
 
 DISK_SECTORS=$(cat /sys/class/block/mmcblk0/size 2>/dev/null)
 PART_START=$(cat /sys/class/block/mmcblk0p2/start 2>/dev/null)
@@ -38,7 +77,7 @@ PART_SIZE=$(cat /sys/class/block/mmcblk0p2/size 2>/dev/null)
 log "raw reads: disk_sectors=$DISK_SECTORS part_start=$PART_START part_size=$PART_SIZE"
 
 if ! is_number "$DISK_SECTORS" || ! is_number "$PART_START" || ! is_number "$PART_SIZE"; then
-    log "ERROR: one or more sysfs size reads failed or non-numeric, aborting WITHOUT setting done flag"
+    log "ERROR: one or more sysfs size reads failed or non-numeric"
     exit 1
 fi
 
@@ -49,73 +88,57 @@ PART_END=$((PART_START + PART_SIZE - 1))
 FREE_SECTORS=$((DISK_SECTORS - PART_END - 1))
 FREE_KB=$((FREE_SECTORS * SECTOR_SIZE / 1024))
 
-log "free after $PART: ${FREE_KB}KB (start=$PART_START size=$PART_SIZE disk_sectors=$DISK_SECTORS)"
-
 PART_SIZE_KB=$((PART_SIZE * SECTOR_SIZE / 1024))
 FS_SIZE_KB=0
 if mountpoint -q "$MOUNT_POINT"; then
     FS_SIZE_KB=$(df -k "$MOUNT_POINT" | awk 'NR==2{print $2}')
     is_number "$FS_SIZE_KB" || FS_SIZE_KB=0
 fi
-log "partition size: ${PART_SIZE_KB}KB, current filesystem size: ${FS_SIZE_KB}KB"
 
-FS_NEEDS_RESIZE=0
-if [ "$FS_SIZE_KB" -lt $((PART_SIZE_KB - 8192)) ]; then
-    FS_NEEDS_RESIZE=1
-fi
+log "free unallocated: ${FREE_KB}KB, partition: ${PART_SIZE_KB}KB, filesystem: ${FS_SIZE_KB}KB"
 
-if [ "$FREE_KB" -lt 8192 ] && [ "$FS_NEEDS_RESIZE" -eq 0 ]; then
-    log "genuinely nothing to do (no free space, filesystem already matches partition) - setting done flag"
-    touch "$DONE_FLAG"
-    sync
+if [ "$FREE_KB" -lt 8192 ]; then
+    log "no meaningful free space to reclaim (${FREE_KB}KB) - nothing to do, exiting without touching the mount"
     exit 0
 fi
 
-SKIP_PARTITION_GROWTH=0
-if [ "$FREE_KB" -lt 8192 ] && [ "$FS_NEEDS_RESIZE" -eq 1 ]; then
-    log "no unallocated disk space left, but filesystem (${FS_SIZE_KB}KB) is smaller than its partition (${PART_SIZE_KB}KB) - reformatting to match, skipping the sfdisk/partx growth steps"
-    SKIP_PARTITION_GROWTH=1
-fi
-
 if mountpoint -q "$MOUNT_POINT"; then
-    log "backing up seed content from $MOUNT_POINT"
-    tar -cf "$SEED_BACKUP" -C "$MOUNT_POINT" . 2>>"$LOG"
+    log "backing up content from $MOUNT_POINT"
+    if ! tar -cf "$HOME_BACKUP" -C "$MOUNT_POINT" . 2>>"$LOG"; then
+        log "ERROR: backup failed - aborting before touching the mounted filesystem"
+        rm -f "$HOME_BACKUP"
+        exit 1
+    fi
+
     if ! umount "$MOUNT_POINT" 2>>"$LOG"; then
-        log "ERROR: could not unmount $MOUNT_POINT, aborting WITHOUT setting done flag"
+        log "ERROR: could not unmount $MOUNT_POINT"
         exit 1
     fi
 fi
 
-if [ "$SKIP_PARTITION_GROWTH" -eq 1 ]; then
-    log "skipping sfdisk/partx - partition is already at its full size"
-else
-    log "growing partition $PART_NUM via sfdisk"
-    echo ", +" | sfdisk -N "$PART_NUM" --no-reread "$DISK" >>"$LOG" 2>&1
-    SFDISK_RC=$?
-    log "sfdisk exit code: $SFDISK_RC"
-
-    if [ "$SFDISK_RC" -ne 0 ]; then
-        log "ERROR: sfdisk failed, aborting WITHOUT setting done flag"
-        exit 1
-    fi
-
-    sync
-
-    partx -u --nr "$PART_NUM" "$DISK" >>"$LOG" 2>&1
-    PARTX_RC=$?
-    log "partx update exit code: $PARTX_RC"
+log "growing partition $PART_NUM via sfdisk"
+echo ", +" | sfdisk -N "$PART_NUM" --no-reread "$DISK" >>"$LOG" 2>&1
+SFDISK_RC=$?
+log "sfdisk exit code: $SFDISK_RC"
+if [ "$SFDISK_RC" -ne 0 ]; then
+    log "ERROR: sfdisk failed"
+    exit 1
 fi
+
+sync
+partx -u --nr "$PART_NUM" "$DISK" >>"$LOG" 2>&1
+log "partx update exit code: $?"
 
 NEW_PART_SIZE=$(cat /sys/class/block/mmcblk0p2/size 2>/dev/null)
 log "current partition size: $NEW_PART_SIZE sectors (was $PART_SIZE before this run)"
 
 if ! is_number "$NEW_PART_SIZE"; then
-    log "ERROR: could not read partition size, aborting WITHOUT setting done flag"
+    log "ERROR: could not read partition size"
     exit 1
 fi
 
-if [ "$SKIP_PARTITION_GROWTH" -eq 0 ] && [ "$NEW_PART_SIZE" -le "$PART_SIZE" ]; then
-    log "ERROR: partition did not grow (kernel view still stale?), aborting WITHOUT setting done flag"
+if [ "$NEW_PART_SIZE" -le "$PART_SIZE" ]; then
+    log "ERROR: partition did not grow (kernel view still stale?)"
     exit 1
 fi
 
@@ -125,21 +148,23 @@ MKFS_RC=$?
 log "mkfs.vfat exit code: $MKFS_RC"
 sync
 blockdev --flushbufs "$PART" 2>>"$LOG"
-
 if [ "$MKFS_RC" -ne 0 ]; then
-    log "ERROR: mkfs.vfat failed, aborting WITHOUT setting done flag"
+    log "ERROR: mkfs.vfat failed"
     exit 1
 fi
 
 if ! mount "$PART" "$MOUNT_POINT" 2>>"$LOG"; then
-    log "ERROR: mount failed after reformat, aborting WITHOUT setting done flag"
+    log "ERROR: mount failed after reformat"
     exit 1
 fi
 
-if [ -f "$SEED_BACKUP" ]; then
-    log "restoring seed content"
-    tar -xf "$SEED_BACKUP" -C "$MOUNT_POINT" 2>>"$LOG"
-    rm -f "$SEED_BACKUP"
+if [ -f "$HOME_BACKUP" ]; then
+    log "restoring HOME content"
+    if ! tar -xf "$HOME_BACKUP" -C "$MOUNT_POINT" --no-same-owner --no-same-permissions 2>>"$LOG"; then
+        log "ERROR: restore failed - HOME may be incomplete. Backup left at $HOME_BACKUP for manual recovery if it still exists."
+        exit 1
+    fi
+    rm -f "$HOME_BACKUP"
 fi
 
 sync
@@ -148,7 +173,5 @@ blockdev --flushbufs "$PART" 2>>"$LOG"
 MOUNTED_KB=$(df -k "$MOUNT_POINT" | awk 'NR==2{print $2}')
 log "mounted $MOUNT_POINT: ${MOUNTED_KB}KB"
 
-touch "$DONE_FLAG"
-sync
-log "done - HOME successfully resized"
+log "done: HOME successfully resized"
 exit 0

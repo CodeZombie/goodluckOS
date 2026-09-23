@@ -1,5 +1,5 @@
 # goodluckOS
-A modern, performance-optimized operating system for the GA36-MB.
+A modern, performance-optimized operating system for Allwinner A23/A33-based handheld emulator consoles.
 
 ## Builidng
 The build process for goodluckOS is split into four sections: The Kernel, The Rootfs, The Home Overlay, and The Image.

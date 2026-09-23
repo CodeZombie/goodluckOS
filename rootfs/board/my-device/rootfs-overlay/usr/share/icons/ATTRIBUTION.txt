@@ -1,0 +1,14 @@
+The following icon files are part of the Apache-2.0-Licensed RemixIcon package.
+    poweroff.png
+    reboot.png
+    resize-home.png
+    system-settings.png
+
+This icon package is available at https://github.com/cyberalien/RemixIcon
+
+A copy of the Apache 2.0 License is available here: https://github.com/cyberalien/RemixIcon/blob/master/License
+
+The icons were acquired via https://icon-sets.iconify.design/ri/ with the following settings:
+    file-type: png
+    size: 48px
+    color: #D2D2D2

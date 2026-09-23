@@ -18,11 +18,16 @@ LIBRETRO_MAJOR_CORES_LIST = \
 	genesis_plus_gx \
 	quicknes \
 	dosbox \
-	pcsx_rearmed
+	pcsx_rearmed \
+	gambatte
+
+CMAKE_LIBRETRO_CORES_LIST = \
+	mgba
+
 
 define LIBRETRO_CORES_RUN_FETCH
-	cd $(@D) && \
-		./libretro-fetch.sh $(LIBRETRO_MAJOR_CORES_LIST)
+	cd $(@D) && ./libretro-fetch.sh $(LIBRETRO_MAJOR_CORES_LIST)
+	cd $(@D) && ./libretro-fetch.sh $(CMAKE_LIBRETRO_CORES_LIST)
 endef
 LIBRETRO_CORES_POST_EXTRACT_HOOKS += LIBRETRO_CORES_RUN_FETCH
 
@@ -36,6 +41,25 @@ define LIBRETRO_CORES_BUILD_CMDS
 		LDFLAGS="$(TARGET_LDFLAGS)" \
 		MAKE="$(MAKE)" \
 		./libretro-build.sh $(LIBRETRO_MAJOR_CORES_LIST)
+
+	rm -rf $(@D)/libretro-mgba/build
+	mkdir -p $(@D)/libretro-mgba/build
+	cd $(@D)/libretro-mgba/build && \
+		$(HOST_DIR)/bin/cmake .. \
+			-DCMAKE_TOOLCHAIN_FILE=$(HOST_DIR)/share/buildroot/toolchainfile.cmake \
+			-DCMAKE_BUILD_TYPE=Release \
+			-DBUILD_LIBRETRO=ON \
+			-DBUILD_SDL=OFF \
+			-DBUILD_QT=OFF \
+			-DUSE_FFMPEG=OFF \
+			-DUSE_SQLITE3=OFF \
+			-DUSE_MINIZIP=OFF \
+			-DUSE_EDITLINE=OFF \
+			-DUSE_DISCORD_RPC=OFF
+	$(MAKE) -C $(@D)/libretro-mgba/build mgba_libretro
+
+	mkdir -p $(@D)/dist/unix
+	cp $(@D)/libretro-mgba/build/mgba_libretro.so $(@D)/dist/unix/mgba_libretro.so
 endef
 
 define LIBRETRO_CORES_INSTALL_TARGET_CMDS

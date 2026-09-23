@@ -8,14 +8,12 @@ mkdir -p out
 # We create these directly in the overlay folder and not staging because if they remain empty git won't track them,
 # but if you want to stick a file in there, the folder will likely already exist and git will automatically start tracking it.
 mkdir -p overlay/roms
-mkdir -p overlay/roms/nes
-mkdir -p overlay/roms/snes
-mkdir -p overlay/roms/gba
-mkdir -p overlay/roms/gbc
-mkdir -p overlay/roms/gb
-mkdir -p overlay/roms/pico-8
-mkdir -p overlay/roms/psx
-mkdir -p overlay/roms/psp
+mkdir -p overlay/roms/nes/icons
+mkdir -p overlay/roms/snes/icons
+mkdir -p overlay/roms/gba/icons
+mkdir -p overlay/roms/gbc/icons
+mkdir -p overlay/roms/gb/icons
+mkdir -p overlay/roms/psx/icons
 mkdir -p overlay/.config/retroarch/cores
 
 rm -rf staging

@@ -8,20 +8,13 @@
 #include <unistd.h>
 #include <alsa/asoundlib.h>
 
-/* * * * * * * * * * * * * * * * * * *
- *             Constants
- * * * * * * * * * * * * * * * * * * */
 const char* ALSA_MIXER_NAME = "Headphone";
 const char* ALSA_CARD = "GA36mbAudio";
 
-/* * * * * * * * * * * * * * * * * * *
- * System Setting Getters and Setters
- * * * * * * * * * * * * * * * * * * */
 int get_brightness() {
     return 5;
 }
 void set_brightness(int brightness) {
-    // Assuming max_brightness is 100 or you scale this accordingly.
     std::ofstream file("/sys/class/backlight/backlight/brightness");
     if (file.is_open()) {
         file << brightness;
@@ -46,7 +39,7 @@ long get_alsa_volume() {
     if (elem) {
         snd_mixer_selem_get_playback_volume_range(elem, &min, &max);
         snd_mixer_selem_get_playback_volume(elem, SND_MIXER_SCHN_FRONT_LEFT, &vol);
-        vol = (vol * 100) / max; // Scale back to 0-100
+        vol = (vol * 100) / max;
     }
     snd_mixer_close(handle);
     return vol;
@@ -118,9 +111,6 @@ void set_alsa_mute(bool mute) {
 
 
 
-/* * * * * * * * * * * * * * * * * * *
- *             Constants
- * * * * * * * * * * * * * * * * * * */
 void section_headear(const char* text) {
     float windowWidth = ImGui::GetWindowSize().x;
     float textWidth = ImGui::CalcTextSize(text).x;
@@ -162,7 +152,7 @@ int main(int argc, char* argv[]) {
         }
     }
 
-    // Setting Values
+    // Settings Values
     int display_brightness = get_brightness();
     int current_volume = get_alsa_volume();
     bool current_mute = get_alsa_mute();
@@ -172,15 +162,13 @@ int main(int argc, char* argv[]) {
     while (running) {
         SDL_Event event;
 
-        // SDL_WaitEvent blocks until an input happens.
-        // This guarantees the app ONLY updates when the user interacts.
         if (SDL_WaitEvent(&event)) {
             do {
                 ImGui_ImplSDL2_ProcessEvent(&event);
                 if (event.type == SDL_QUIT) {
                     running = false;
                 }
-            } while (SDL_PollEvent(&event)); // Process all pending events in the queue simultaneously
+            } while (SDL_PollEvent(&event));
         }
 
         ImGui_ImplSDLRenderer2_NewFrame();

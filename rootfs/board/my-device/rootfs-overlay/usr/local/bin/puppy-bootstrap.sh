@@ -1,5 +1,13 @@
 #!/bin/sh
 
+if [ -f /home/player/autostart ]; then
+    cmd="$(cat /home/player/autostart)"
+    sh -c "exec $cmd" &
+    echo $! > /tmp/puppy-active-process-id
+    wait $!
+    rm -f /tmp/puppy-active-process-id
+fi
+
 while true; do
     rm -f /tmp/launch
 

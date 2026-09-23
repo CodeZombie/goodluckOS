@@ -6,22 +6,14 @@
 
 SYSTEM_SETTINGS_SITE = $(SYSTEM_SETTINGS_PKGDIR)
 SYSTEM_SETTINGS_SITE_METHOD = local
-SYSTEM_SETTINGS_DEPENDENCIES = sdl2
+SYSTEM_SETTINGS_DEPENDENCIES = sdl2 imgui
 
 define SYSTEM_SETTINGS_BUILD_CMDS
 	$(TARGET_CXX) $(TARGET_CXXFLAGS) -std=c++11 \
-		-I$(@D)/imgui \
-		-I$(@D)/imgui/backends \
 		-I$(STAGING_DIR)/usr/include/SDL2 \
 		-o $(@D)/system-settings $(@D)/system-settings.cpp \
-		$(@D)/imgui/imgui.cpp \
-		$(@D)/imgui/imgui_draw.cpp \
-		$(@D)/imgui/imgui_tables.cpp \
-		$(@D)/imgui/imgui_widgets.cpp \
-		$(@D)/imgui/backends/imgui_impl_sdl2.cpp \
-		$(@D)/imgui/backends/imgui_impl_sdlrenderer2.cpp \
 		$(TARGET_LDFLAGS) \
-		-lpthread -ldrm -lSDL2 -lGLESv2 -lEGL -lasound
+		-lpthread -ldrm -lSDL2 -lGLESv2 -lEGL -lasound -limgui
 endef
 
 define SYSTEM_SETTINGS_INSTALL_TARGET_CMDS

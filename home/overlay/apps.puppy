@@ -1,0 +1,27 @@
+# Example Entry:
+#
+# [ENTRY]
+# CATEGORY=Applications
+# NAME=Some Application
+# DESCRIPTION=This is an application!
+# ICON=/home/player/icons/application-icon.png
+# COMMAND=launch-the-application --some-flag
+#
+# Example Archive:
+# Fields:
+#   NAME: The name of the archive.
+#   Description: A longer description of the archive.
+#   ENTRY_DIRECTORIES: A semicolon-separated list of directories Puppy will look for roms in for this category
+#   ENTRY_EXTENSIONS: The file-extensions for roms that Puppy will look for in ENTRY_DIRECTORIES
+#   ENTRY_ICONS_DIRECTORIES: Where Puppy will look for per-rom icons
+#   DEFAULT_ICON: The default icon to show if a per-rom icon wasn't found.
+#   COMMAND: The command to launch entries with. `%s` gets replaced with the path to the rom file.
+#
+# [ARCHIVE]
+# NAME=Playstation
+# Description=Sony Playstation
+# ENTRY_DIRECTORIES=/home/player/roms/psx
+# ENTRY_EXTENSIONS=bin;psx
+# ENTRY_ICONS_DIRECTORIES=/home/player/roms/psx/icons
+# DEFAULT_ICON=/usr/share/icons/psx.png
+# COMMAND=retroarch -L /usr/lib/libretro/pcsx_rearmed_libretro.so %s

@@ -2,9 +2,8 @@
 
 case "$1" in
   start)
-    echo "Starting USB Composite Gadget..."
+    echo "Starting USB Serial Gadget..."
 
-    # Mount configfs if not already mounted
     mount -t configfs none /sys/kernel/config 2>/dev/null
 
     cd /sys/kernel/config/usb_gadget
@@ -20,35 +19,36 @@ case "$1" in
     # Set English strings
     mkdir -p strings/0x409
     echo "0123456789" > strings/0x409/serialnumber
-    echo "GoodluckOS"  > strings/0x409/manufacturer
+    echo "goodluckOS"  > strings/0x409/manufacturer
     echo "GA36MB" > strings/0x409/product
 
     # Create the configuration
     mkdir -p configs/c.1/strings/0x409
-    echo "Serial + Network" > configs/c.1/strings/0x409/configuration
+    echo "Serial" > configs/c.1/strings/0x409/configuration
     echo 250 > configs/c.1/MaxPower
 
-    # Instantiate the functions
+    # Instantiate the ACM function
     mkdir -p functions/acm.usb0
-    mkdir -p functions/ecm.usb0
 
-    # Link functions to the configuration
+    # Link the function to the configuration
     ln -s functions/acm.usb0 configs/c.1/
-    ln -s functions/ecm.usb0 configs/c.1/
 
-    # Bind the gadget to the UDC (USB Device Controller)
-    # 'ls' grabs the active Sunxi UDC (e.g., musb-hdrc.1.auto)
+    # Bind the gadget to the USB Device Controller
     ls /sys/class/udc > UDC
     ;;
   stop)
-    echo "Stopping USB Composite Gadget..."
+    echo "Stopping USB Serial Gadget..."
+
+    # Unbind from UDC
     echo "" > /sys/kernel/config/usb_gadget/g1/UDC
+
+    # Remove symlinks
     rm -f /sys/kernel/config/usb_gadget/g1/configs/c.1/acm.usb0
-    rm -f /sys/kernel/config/usb_gadget/g1/configs/c.1/ecm.usb0
+
+    # Remove directories in reverse order of creation
     rmdir /sys/kernel/config/usb_gadget/g1/configs/c.1/strings/0x409
     rmdir /sys/kernel/config/usb_gadget/g1/configs/c.1
     rmdir /sys/kernel/config/usb_gadget/g1/functions/acm.usb0
-    rmdir /sys/kernel/config/usb_gadget/g1/functions/ecm.usb0
     rmdir /sys/kernel/config/usb_gadget/g1/strings/0x409
     rmdir /sys/kernel/config/usb_gadget/g1
     ;;

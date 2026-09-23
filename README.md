@@ -100,6 +100,13 @@ Some subset of portmaster games could theoretically work, however I want to tamp
 The Allwinner A23/A33 is a 32-bit SoC. This means that 64-bit software simply _cannot_ run on it. There are a number of popular android ports that exist only as aarch64 (64-bit) distributions. Those will never work. Additionally, even with ZRAM there, the device is still heavily RAM-limited, so unoptimized games (I'm looking at you, Balatro) will struggle to run without patching.
 
 With that said, most of the games people actually care about (Stardew Valley, Half-Life 1, n64 re-comps, Android GameMaker games, OpenMW, OpenRCT2, + more) are 32-bit games, and therefore should theoretically work if anyone cares to create 32-bit ports.
+## How Do I Install It?
+1. Download the latest `goodluckOS.zip` from [COMING SOON]
+2. Extract it
+3. Flash it to a microSD card of at least 1gb capacity with [Rufus](https://rufus.ie/en/), [balenaEtcher](https://etcher.balena.io/), [dd](https://man7.org/linux/man-pages/man1/dd.1.html), etc
+4. Plug the micro SD card into TF Slot 1 (TF1-OS) on your GA36-MB 
+5. Power it on
+6. Wait for the auto-resize process to finish (the blue LED will turn on when it starts, and off when it's done) before powering off.
 
 ## How Do I Build It?
 GoodluckOS uses a novel four-step containerized build system featuring Buildroot. This means the OS can be configured and built extremely easily and portably with no extra dependencies at all besides Docker and Docker Compose (or Podman).

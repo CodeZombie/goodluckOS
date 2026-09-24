@@ -6,4 +6,5 @@ source "../package/puppy/Config.in"
 source "../package/are-you-sure/Config.in"
 source "../package/system-settings/Config.in"
 source "../package/resize-home/Config.in"
+source "../package/ppsspp/Config.in"
 endmenu

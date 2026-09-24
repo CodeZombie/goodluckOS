@@ -95,6 +95,15 @@ DEFAULT_ICON=/usr/share/icons/dos.png
 COMMAND=retroarch -L /usr/lib/libretro/dosbox_libretro.so %s
 
 [ARCHIVE]
+NAME=PSP
+Description=PSP (Playstation Portable)
+ENTRY_DIRECTORIES=/home/player/roms/psp
+ENTRY_EXTENSIONS=psp
+ENTRY_ICONS_DIRECTORIES=/home/player/roms/psp/icons
+DEFAULT_ICON=/usr/share/icons/psp.png
+COMMAND=retroarch -L /usr/lib/libretro/ppsspp_libretro.so %s
+
+[ARCHIVE]
 NAME=Doom
 Description=Doom WADs
 ENTRY_DIRECTORIES=/home/player/roms/doom

@@ -1,0 +1,4 @@
+#!/bin/sh
+puppy_bootstrap_pid="$(cat /dev/shm/puppy-bootstrap-pid 2>/dev/null)"
+[ -n "$puppy_bootstrap_pid" ] && kill -TERM "$puppy_bootstrap_pid"
+exec /sbin/reboot "$@"

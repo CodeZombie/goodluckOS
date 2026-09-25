@@ -18,9 +18,9 @@ namespace fs = std::filesystem;
 static const char* kFontFile      = "/usr/share/fonts/Inter_24pt-Medium.ttf";
 static const char* kAppsFiles[]   = {"/usr/share/puppy/apps.puppy", "/home/player/apps.puppy"};
 static const char* kPuppyFiles[]   = {"/home/player/.local/share/applications"};
-static const char* kLaunchFile    = "/tmp/launch";
-static const char* kStateFile     = "/tmp/launcher_state";
-static const char* kAutoStartFile = "/home/player/autostart";
+static const char* kLaunchFile    = "/dev/shm/launch";
+static const char* kStateFile     = "/dev/shm/launcher_state";
+static const char* kAutoStartFile = "/home/player/autolaunch";
 
 constexpr int kScreenW              = 640;
 constexpr int kScreenH              = 480;
@@ -242,7 +242,7 @@ struct Entry {
         }
 
         if (autostart && badgeFont) {
-            static const std::string label = "autostart";
+            static const std::string label = "autolaunch";
             const int padX = 6, padY = 2;
             int tw = textWidth(badgeFont, label);
             int th = TTF_FontHeight(badgeFont);

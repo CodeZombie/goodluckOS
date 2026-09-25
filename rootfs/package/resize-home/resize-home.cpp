@@ -453,7 +453,7 @@ int main(int argc, char* argv[]) {
 
         if (state.current_page == Page::REBOOTING && !state.reboot_command_issued) {
             state.reboot_command_issued = true;
-            int rc = std::system("sync && doas -n /sbin/reboot -f");
+            int rc = std::system("doas -n /sbin/reboot");
             if (rc != 0) {
                 std::error_code ec;
                 fs::remove(kRequestFlag, ec);

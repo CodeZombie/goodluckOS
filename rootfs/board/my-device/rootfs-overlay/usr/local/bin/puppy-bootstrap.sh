@@ -1,27 +1,28 @@
 #!/bin/sh
 
-if [ -f /home/player/autostart ]; then
-    cmd="$(cat /home/player/autostart)"
+# store puppy-boostrap's PID (so it can be killed by poweroff/reboot)
+echo $$ > /dev/shm/puppy-bootstrap-pid
+
+if [ -f "/home/player/autolaunch" ]; then
+    cmd="$(cat /home/player/autolaunch)"
     sh -c "exec $cmd" &
-    echo $! > /tmp/puppy-active-process-id
+    echo $! > /dev/shm/puppy-active-process-id
     wait $!
-    rm -f /tmp/puppy-active-process-id
+    rm -f /dev/shm/puppy-active-process-id
 fi
 
 while true; do
-    rm -f /tmp/launch
+    rm -f /dev/shm/launch
 
     /usr/bin/puppy
 
-    if [ -f /tmp/launch ]; then
-        cmd="$(cat /tmp/launch)"
+    if [ -f "/dev/shm/launch" ]; then
+        cmd="$(cat /dev/shm/launch)"
         if [ -n "$cmd" ]; then
             sh -c "exec $cmd" &
-            echo $! > /tmp/puppy-active-process-id
+            echo $! > /dev/shm/puppy-active-process-id
             wait $!
-            rm -f /tmp/puppy-active-process-id
+            rm -f /dev/shm/puppy-active-process-id
         fi
-    else
-        sleep 1
     fi
 done

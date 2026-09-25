@@ -14,6 +14,10 @@ mkdir -p overlay/roms/gba/icons
 mkdir -p overlay/roms/gbc/icons
 mkdir -p overlay/roms/gb/icons
 mkdir -p overlay/roms/psx/icons
+mkdir -p overlay/roms/genesis/icons
+mkdir -p overlay/roms/sms/icons
+mkdir -p overlay/roms/gg/icons
+mkdir -p overlay/roms/segacd/icons
 mkdir -p overlay/.config/retroarch/cores
 
 rm -rf staging

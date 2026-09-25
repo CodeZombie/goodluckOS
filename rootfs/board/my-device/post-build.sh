@@ -21,3 +21,7 @@ echo "tty1::respawn:/bin/su - player -c '/usr/local/bin/puppy-bootstrap.sh'" >> 
 sed -i 's/ --user nobody//' "$TARGET_DIR/etc/init.d/S10triggerhappy"
 
 mkdir ${TARGET_DIR}/etc/player-flags
+
+# Move triggerhappy daemon launch way later in the boot process.
+# It behaved badly when it's too early.
+mv ${TARGET_DIR}/etc/init.d/S10triggerhappy ${TARGET_DIR}/etc/init.d/S99triggerhappy

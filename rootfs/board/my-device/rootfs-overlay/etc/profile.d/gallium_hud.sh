@@ -1,0 +1,3 @@
+export GALLIUM_HUD_TOGGLE_SIGNAL=34
+export GALLIUM_HUD_VISIBLE=false
+export GALLIUM_HUD=fps,cpu

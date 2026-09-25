@@ -2,14 +2,14 @@
 CATEGORY=System
 NAME=Reboot
 DESCRIPTION=Reboot the device
-COMMAND=are-you-sure "Are you sure you want to reboot the device?" "sync && doas -n /sbin/reboot -f"
+COMMAND=are-you-sure "Are you sure you want to reboot the device?" "doas -n /sbin/reboot"
 ICON=/usr/share/icons/reboot.png
 
 [ENTRY]
 CATEGORY=System
 NAME=Power Off
 DESCRIPTION=Power off the device
-COMMAND=are-you-sure "Are you sure you want to power off the device?" "sync && doas -n /sbin/poweroff -f"
+COMMAND=are-you-sure "Are you sure you want to power off the device?" "doas -n /sbin/poweroff"
 ICON=/usr/share/icons/poweroff.png
 
 [ENTRY]
@@ -37,8 +37,8 @@ ICON=/usr/share/icons/retroarch.png
 CATEGORY=Games
 NAME=Chocolate Doom
 DESCRIPTION=It's Doom.
-COMMAND=chocolate-doom
 ICON=/usr/share/icons/chocolate-doom.png
+COMMAND=chocolate-doom
 
 [ARCHIVE]
 NAME=Playstation
@@ -102,6 +102,42 @@ ENTRY_EXTENSIONS=psp
 ENTRY_ICONS_DIRECTORIES=/home/player/roms/psp/icons
 DEFAULT_ICON=/usr/share/icons/psp.png
 COMMAND=retroarch -L /usr/lib/libretro/ppsspp_libretro.so %s
+
+[ARCHIVE]
+NAME=Sega Genesis
+Description=Sega Genesis / Mega Drive
+ENTRY_DIRECTORIES=/home/player/roms/genesis
+ENTRY_EXTENSIONS=md;smd;gen;bin
+ENTRY_ICONS_DIRECTORIES=/home/player/roms/genesis/icons
+DEFAULT_ICON=/usr/share/icons/genesis.png
+COMMAND=retroarch -L /usr/lib/libretro/genesis_plus_gx_libretro.so %s
+
+[ARCHIVE]
+NAME=Sega Master System
+Description=Sega Master System (SMS)
+ENTRY_DIRECTORIES=/home/player/roms/sms
+ENTRY_EXTENSIONS=sms
+ENTRY_ICONS_DIRECTORIES=/home/player/roms/sms/icons
+DEFAULT_ICON=/usr/share/icons/sms.png
+COMMAND=retroarch -L /usr/lib/libretro/genesis_plus_gx_libretro.so %s
+
+[ARCHIVE]
+NAME=Sega Game Gear
+Description=Sega Game Gear (GG)
+ENTRY_DIRECTORIES=/home/player/roms/gg
+ENTRY_EXTENSIONS=gg
+ENTRY_ICONS_DIRECTORIES=/home/player/roms/gg/icons
+DEFAULT_ICON=/usr/share/icons/gg.png
+COMMAND=retroarch -L /usr/lib/libretro/genesis_plus_gx_libretro.so %s
+
+[ARCHIVE]
+NAME=Sega CD
+Description=Sega CD / Mega CD
+ENTRY_DIRECTORIES=/home/player/roms/segacd
+ENTRY_EXTENSIONS=cue;chd;iso
+ENTRY_ICONS_DIRECTORIES=/home/player/roms/segacd/icons
+DEFAULT_ICON=/usr/share/icons/segacd.png
+COMMAND=retroarch -L /usr/lib/libretro/genesis_plus_gx_libretro.so %s
 
 [ARCHIVE]
 NAME=Doom

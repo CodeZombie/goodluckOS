@@ -14,17 +14,13 @@ fi
 # Disable default getty on tty1
 sed -i 's/^tty1::respawn/#tty1::respawn/' "${INITTAB}"
 
-echo "" >> "$INITTAB"
-echo "tty1::respawn:/bin/su - player -c '/usr/local/bin/puppy-bootstrap.sh'" >> "$INITTAB"
-
 # Modify the triggerhappy init.d script so that it runs as root instead of 'nobody'
 sed -i 's/ --user nobody//' "$TARGET_DIR/etc/init.d/S10triggerhappy"
-
-mkdir ${TARGET_DIR}/etc/player-flags
-
 # Move triggerhappy daemon launch way later in the boot process.
 # It behaves badly when it's too early.
 mv ${TARGET_DIR}/etc/init.d/S10triggerhappy ${TARGET_DIR}/etc/init.d/S99triggerhappy
+
+mkdir ${TARGET_DIR}/etc/player-flags
 
 SHUTDOWN_LINE='::shutdown:/etc/init.d/S99puppy-bootstrap stop'
 

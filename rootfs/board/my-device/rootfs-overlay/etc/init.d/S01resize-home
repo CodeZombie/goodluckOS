@@ -1,5 +1,9 @@
 #!/bin/sh
 
+if [ "$1" = "stop" ]; then
+    exit 0
+fi
+
 DISK=/dev/mmcblk0
 PART=/dev/mmcblk0p2
 PART_NUM=2

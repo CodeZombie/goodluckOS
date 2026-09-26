@@ -23,5 +23,24 @@ sed -i 's/ --user nobody//' "$TARGET_DIR/etc/init.d/S10triggerhappy"
 mkdir ${TARGET_DIR}/etc/player-flags
 
 # Move triggerhappy daemon launch way later in the boot process.
-# It behaved badly when it's too early.
+# It behaves badly when it's too early.
 mv ${TARGET_DIR}/etc/init.d/S10triggerhappy ${TARGET_DIR}/etc/init.d/S99triggerhappy
+
+SHUTDOWN_LINE='::shutdown:/etc/init.d/S99puppy-bootstrap stop'
+
+if [ -f "${INITTAB}" ]; then
+    if ! grep -qF 'puppy-bootstrap.pid' "${INITTAB}"; then
+        RCK_LINE='::shutdown:/etc/init.d/rcK'
+        if grep -qF "${RCK_LINE}" "${INITTAB}"; then
+            # Insert this right before the "::shutdown:/etc/init.d/rcK" line
+            ESCAPED_LINE=$(printf '%s\n' "${SHUTDOWN_LINE}" | sed 's/[&/\]/\\&/g')
+            sed -i "\#${RCK_LINE}#i ${ESCAPED_LINE}" "${INITTAB}"
+            echo "post-build.sh: inserted puppy-bootstrap shutdown line into inittab"
+        else
+            echo "post-build.sh: WARNING: rcK shutdown line not found in inittab, appending puppy-bootstrap line at end instead"
+            echo "${SHUTDOWN_LINE}" >> "${INITTAB}"
+        fi
+    fi
+else
+    echo "post-build.sh: WARNING: ${INITTAB} not found, skipping puppy-bootstrap shutdown line injection"
+fi

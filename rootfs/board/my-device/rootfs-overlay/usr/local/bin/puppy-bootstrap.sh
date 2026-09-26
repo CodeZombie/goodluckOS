@@ -1,8 +1,5 @@
 #!/bin/sh
 
-# store puppy-boostrap's PID (so it can be killed by poweroff/reboot)
-echo $$ > /dev/shm/puppy-bootstrap-pid
-
 if [ -f "/home/player/autolaunch" ]; then
     cmd="$(cat /home/player/autolaunch)"
     sh -c "exec $cmd" &

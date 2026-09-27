@@ -4,7 +4,7 @@ An uncompromisingly fast, small, modern, and feature-rich custom firmware for A2
 ## Features
 - Mainline Linux 7.2
 - Everything compiled from scratch with the best optimization flags for the hardware
-- Optimzied for performance. No systemd, no unecessary background processes, no x11/wayland
+- Optimized for performance. No systemd, no unecessary background processes, no x11/wayland
 - Significantly smaller and faster than the stock firmware
 - Boots in 10 seconds (stock firmware takes 50)
 - Can be flashed to a 1gb SD card and still give you over 500mb of free space for games
@@ -13,11 +13,13 @@ An uncompromisingly fast, small, modern, and feature-rich custom firmware for A2
 - Speaker audio
 - Great battery life
 - No swap on SD card (massively improves the life of your card over the stock f/w)
+- Built-in `Resize Home` app which grows your HOME partition to fill all the available space on your microSD card.
 - FN+Vol buttons adjust the screen brightness from anywhere
 - FN+START+SELECT kills the active application, bringing you right back to the launcher
+- FN+DPAD_UP toggles a live FPS/CPU graph for monitoring in-game performance.
 - If the screen is on, the LEDs are off. Nothing blinding you while you're playing in the dark
 - Comes stock with Chocolate Doom, ready to play
-- Comes stock with Retroarch and several optimized cores (PCSX-ReArmed, Snes9x, QuickNES, DOSbox)
+- Comes stock with Retroarch and several optimized cores (PCSX-ReArmed, Snes9x, QuickNES, DOSbox, Genesis Plus GX, mGBA, etc)
 - Games perform very well. Metal Gear Solid 1 is completely playable at reasonable framerates
 - Comes with a custom, optimized launcher application
 - Autostart any application on boot, including games or a front-end like EmulationStation (coming soon)
@@ -32,6 +34,7 @@ An uncompromisingly fast, small, modern, and feature-rich custom firmware for A2
 - GA36-MB TF-2 support (If the hardware supports it)
 - Mount device storage via USB
 - CPU overclocking
+- Improve performance of PPSSPP emulator core. 
 
 ## Supported Devices
 - GA36-MB v1.2

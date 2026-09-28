@@ -1,6 +1,13 @@
 # goodluckOS
 An uncompromisingly fast, small, modern, and feature-rich custom firmware for A23/A33-based handheld consoles.
 
+## PLEASE READ
+goodluckOS is PRE-RELEASE software. There are no gaurantees that it will work on your hardware.
+
+Please visit [The Download Page/Hardware Identifier Tool](https://codezombie.github.io/goodluckOS/download.html) to see if your hardware is supported by goodluckOS. If it is, you can download goodluckOS from there.
+
+If the above page does not confirm support, please do not attempt to flash a goodluckOS image to your device. Doing so may damage your hardware. Instead, send us your `script.bin` file by making a new Issue here on github. The contents of that file will help us identify your device and add support for devices like it. Thank you!
+
 ## Features
 - Mainline Linux 7.2
 - Everything compiled from scratch with the best optimization flags for the hardware

@@ -289,29 +289,29 @@
 
 &reg_aldo2 {
     regulator-always-on;
-    regulator-min-microvolt = <2500000>;
-    regulator-max-microvolt = <2500000>;
+    // regulator-min-microvolt = <2500000>;
+    // regulator-max-microvolt = <2500000>;
     regulator-name = "vcc-aldo2";
 };
 
 &reg_aldo3 {
     regulator-always-on;
-    regulator-min-microvolt = <3000000>;
-    regulator-max-microvolt = <3000000>;
+    // regulator-min-microvolt = <3000000>;
+    // regulator-max-microvolt = <3000000>;
     regulator-name = "vcc-aldo3";
 };
 
 &reg_dcdc1 {
     regulator-always-on;
-    regulator-min-microvolt = <3300000>;
-    regulator-max-microvolt = <3300000>;
+    // regulator-min-microvolt = <3300000>;
+    // regulator-max-microvolt = <3300000>;
     regulator-name = "vcc-io";
 };
 
 &reg_dcdc2 {
     regulator-always-on;
-    regulator-min-microvolt = <1100000>;
-    regulator-max-microvolt = <1100000>;
+    // regulator-min-microvolt = <1100000>;
+    // regulator-max-microvolt = <1100000>;
     regulator-name = "vdd-sys";
 };
 
@@ -326,8 +326,8 @@
 
 &reg_dcdc5 {
     regulator-always-on;
-    regulator-min-microvolt = <1500000>;
-    regulator-max-microvolt = <1500000>;
+    // regulator-min-microvolt = <1500000>;
+    // regulator-max-microvolt = <1500000>;
     regulator-name = "vcc-dram";
 };
 

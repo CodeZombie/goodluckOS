@@ -2,14 +2,14 @@
 CATEGORY=System
 NAME=Reboot
 DESCRIPTION=Reboot the device
-COMMAND=are-you-sure "Are you sure you want to reboot the device?" "doas -n /sbin/reboot"
+COMMAND=are-you-sure "Are you sure you want to reboot the device?" "echo reboot > /run/power-request"
 ICON=/usr/share/icons/reboot.png
 
 [ENTRY]
 CATEGORY=System
 NAME=Power Off
 DESCRIPTION=Power off the device
-COMMAND=are-you-sure "Are you sure you want to power off the device?" "doas -n /sbin/poweroff"
+COMMAND=are-you-sure "Are you sure you want to power off the device?" "echo poweroff > /run/power-request"
 ICON=/usr/share/icons/poweroff.png
 
 [ENTRY]
@@ -44,7 +44,7 @@ COMMAND=chocolate-doom
 NAME=Playstation
 Description=Sony Playstation
 ENTRY_DIRECTORIES=/home/player/roms/psx
-ENTRY_EXTENSIONS=bin;psx
+ENTRY_EXTENSIONS=bin;cue;chd;m3u;iso
 ENTRY_ICONS_DIRECTORIES=/home/player/roms/psx/icons
 DEFAULT_ICON=/usr/share/icons/psx.png
 COMMAND=retroarch -L /usr/lib/libretro/pcsx_rearmed_libretro.so %s
@@ -62,7 +62,7 @@ COMMAND=retroarch -L /usr/lib/libretro/gambatte_libretro.so %s
 NAME=Super Nintendo
 Description=SNES (Super Nintendo Entertainment System)
 ENTRY_DIRECTORIES=/home/player/roms/snes
-ENTRY_EXTENSIONS=sfc;smc;
+ENTRY_EXTENSIONS=sfc;smc;zip;7z
 ENTRY_ICONS_DIRECTORIES=/home/player/roms/snes/icons
 DEFAULT_ICON=/usr/share/icons/snes.png
 COMMAND=retroarch -L /usr/lib/libretro/snes9x2005_libretro.so %s
@@ -98,7 +98,7 @@ COMMAND=retroarch -L /usr/lib/libretro/dosbox_libretro.so %s
 NAME=PSP
 Description=PSP (Playstation Portable)
 ENTRY_DIRECTORIES=/home/player/roms/psp
-ENTRY_EXTENSIONS=psp
+ENTRY_EXTENSIONS=iso;cso;chd
 ENTRY_ICONS_DIRECTORIES=/home/player/roms/psp/icons
 DEFAULT_ICON=/usr/share/icons/psp.png
 COMMAND=retroarch -L /usr/lib/libretro/ppsspp_libretro.so %s

@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>goodluckOS Hardware Identifier</title>
+<style>
+:root {
+  --bg: #111111;
+  --panel: #1a1a1a;
+  --ink: #f2f2f2;
+  --muted: #9a9a9a;
+  --line: #333333;
+  --accent: #408EE0;
+  --accent-ink: #111111;
+  --ok: #4caf50;
+  --okbg: #16281a;
+  --warn: #c62828;
+  --warnbg: #2a1710;
+  --err: #c62828;
+  --errbg: #2a1414;
+  --focus: #e0b020;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font: 1rem/1.6 "Segoe UI", system-ui, -apple-system, Roboto, sans-serif;
+  min-height: 100vh;
+  display: flex;
+  justify-content: center;
+  padding: 2rem 1rem;
+}
+
+main {
+  width: 100%;
+  max-width: 60rem;
+}
+
+h1 {
+  font-size: 1.75rem;
+  font-weight: 700;
+  margin: 0 0 0.25rem;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+
+a:not(.btn) {
+  color: var(--accent);
+  margin: 0 0 1.5rem;
+}
+
+a:visited:not(.btn) {
+  color: var(--accent);
+  margin: 0 0 1.5rem;
+}
+
+.code {
+  color: var(--accent-ink);
+  background: var(--muted);
+  padding-top: 0.1rem;
+  padding-bottom: 0.1rem;
+  padding-left: 0.5rem;
+  padding-right: 0.5rem;
+  border-radius: 6px;
+  font-family: ui-monospace, "Courier New", monospace;
+}
+
+.foldable .content {
+  display: none;
+  background: var(--line);
+  padding-top:0.5rem;
+  padding-bottom:0.5rem;
+}
+
+.foldable h2 {
+    background: var(--panel);
+    padding:0.5rem;
+    margin-bottom: 0;
+}
+
+.foldable h2:hover {
+  background: var(--line);
+  cursor: pointer;
+}
+
+.lead {
+  color: var(--muted);
+  margin: 0 0 1.5rem;
+}
+
+.drop {
+  display: block;
+  border: 2px dashed var(--line);
+  background: var(--panel);
+  padding: 2.5rem 1.5rem;
+  text-align: center;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+  margin-top: 1rem;
+}
+
+.drop:hover,
+.drop.over {
+  background: var(--panel);
+  border-color: var(--accent);
+}
+
+.drop:focus-within {
+  outline: 3px solid var(--focus);
+  outline-offset: 3px;
+}
+
+.drop input {
+  position: absolute;
+  opacity: 0;
+  width: 1px;
+  height: 1px;
+}
+
+.drop strong {
+  display: block;
+  font-size: 1.15rem;
+}
+
+.drop span {
+  color: var(--muted);
+}
+
+.card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  padding: 1.25rem 1.5rem;
+  margin-top: 1.25rem;
+}
+
+.card h2 {
+  font-size: 1.1rem;
+  margin: 0 0 0.75rem;
+}
+
+.badge {
+  display: inline-block;
+  font-weight: 600;
+  padding: 0.15rem 0.7rem;
+  border-radius: 2rem;
+  font-size: 0.9rem;
+  margin-bottom: 0.75rem;
+}
+
+.ok {
+  border-color: var(--ok);
+}
+
+.ok .badge {
+  background: var(--okbg);
+  color: var(--ok);
+}
+
+.warn {
+  border-color: var(--warn);
+}
+
+.warn .badge {
+  background: var(--warnbg);
+  color: var(--warn);
+}
+
+.err {
+  border-color: var(--err);
+  background: var(--errbg);
+  color: var(--err);
+}
+
+.hash {
+  font: 0.95rem/1.5 ui-monospace, Consolas, monospace;
+  word-break: break-all;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 0.4rem;
+  padding: 0.7rem 0.9rem;
+  margin: 0.4rem 0 0.9rem;
+  user-select: all;
+}
+
+dl {
+  margin: 0 0 1rem;
+}
+
+dt {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+dd {
+  margin: 0 0 0.5rem;
+  font-weight: 600;
+}
+
+.btn {
+  display: inline-block;
+  font: inherit;
+  font-weight: 600;
+  background: var(--accent);
+  color: var(--accent-ink);
+  border: 2px solid var(--accent);
+  border-radius: 0.4rem;
+  padding: 0.55rem 1.1rem;
+  text-decoration: none;
+  cursor: pointer;
+  margin: 0 0.5rem 0.5rem 0;
+}
+
+.ok .btn {
+  background: var(--ok);
+  border-color: var(--ok);
+}
+
+.warn .btn {
+  background: var(--warn);
+  border-color: var(--warn);
+}
+
+.btn.alt {
+  background: transparent;
+  color: var(--accent);
+}
+
+.ok .btn.alt {
+  color: var(--ok);
+}
+
+.warn .btn.alt {
+  color: var(--warn);
+}
+
+.btn:hover {
+  filter: brightness(1.1);
+}
+
+.btn:focus-visible,
+a:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+
+progress {
+  width: 100%;
+  height: 0.7rem;
+  accent-color: var(--accent);
+}
+
+[hidden] {
+  display: none !important;
+}
+
+.foot {
+  color: var(--muted);
+  font-size: 0.85rem;
+  margin-top: 1.5rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+  }
+}
+</style>
+</head>
+<body>
+<main>
+  <h1>goodluckOS Hardware Identifier</h1>
+  <p class="lead">This tool will identify which hardware variant you have and, if supported, will provide you with the correct download link for goodluckOS.</p>
+  <p class="lead">If your device is not supported, PLEASE do not download a random release and try to boot it. It will almost certainly fail and, while unlikely, could damage your hardware.</p>
+
+  <div class="foldable">
+      <h2>Q: How do I use this?</h2>
+      <div class="content">
+        <ol>
+            <li>Dump your stock SD card (the one that came with your device) to a file.</li>
+            <li>Drop that sd card dump file onto this page.</li>
+            <li>The page will extract the hardware configuration file (script.bin) and compare it to a list of suported hardware profiles.</li>
+            <li>If it finds a match, it'll show you a download link</li>
+            <li>If no match is found, it'll provide you with a download link for the script.bin file. Please create an <a href="https://github.com/CodeZombie/goodluckOS/issues">Issue on Github</a> with information about your device, and upload the provided script.bin file. We can use this to build a version of goodluckOS for your device.</li>
+        </ol>
+      </div>
+  </div>
+  <div class="foldable">
+      <h2>Q: How do I create an image of my stock microSD card?</h2>
+      <div class="content">
+          <ul>
+              <li>If you're using windows, use <a href="https://sourceforge.net/projects/win32diskimager/">win32diskimager</a>.</li>
+              <li>If you use Linux, find the device file for your microSD card with <span class="code">lsblk</span> and then run <span class="code">dd if=/dev/sdX of=stock_sdcard.img bs=1M count=128 status=progress</your></span>, where <span class="code">/dev/sdX</span> is your specific device file.</li>
+          </ul>
+      </div>
+  </div>
+
+  <label class="drop" id="drop">
+    <input type="file" id="file">
+    <strong>Drop your Stock SD Card image file here</strong>
+  </label>
+
+  <div id="status" role="status" aria-live="polite"></div>
+  <div id="result" aria-live="polite"></div>
+</main>
+
+<script>
+"use strict";
+const OFFSET = 20340736;
+const LENGTH = 131072;
+
+const KNOWN_HASHES = {
+  "28a4a8b90629f0023cc7f7193ea93745ab56e7d0b184932bb3aa9470cd33b3fc": {
+    name: "GA36-MB v1.2 20260416 (Variant A)",
+    url: "https://github.com/CodeZombie/goodluckOS/releases/download/v0.0.1/goodluckOS.zip"
+  }
+};
+
+const $ = id => document.getElementById(id);
+
+async function sha256Hex(buf){
+  if(window.crypto && crypto.subtle){
+    try{
+      const d=await crypto.subtle.digest("SHA-256",buf);
+      return Array.from(new Uint8Array(d),b=>b.toString(16).padStart(2,"0")).join("");
+    }catch(e){}
+  }
+  showError("Your browser doesn't seem to support crypto/subtle. Please update your browser, or try a different one.");
+}
+
+function esc(s){const d=document.createElement("div");d.textContent=s;return d.innerHTML}
+let blobUrl=null;
+
+function showError(msg){
+  $("status").innerHTML="";
+  $("result").innerHTML='<div class="card err" role="alert"><h2>Could not read this file</h2><p>'+esc(msg)+'</p></div>';
+}
+
+async function handle(file){
+  if(!file) return;
+  if(blobUrl){URL.revokeObjectURL(blobUrl);blobUrl=null}
+  $("result").innerHTML="";
+  $("status").innerHTML='<div class="card"><p style="margin:0 0 .5rem">Reading and hashing '+esc(file.name)+'…</p><progress aria-label="Working"></progress></div>';
+
+  if(file.size < OFFSET+LENGTH){
+    showError("This file is "+file.size.toLocaleString()+" bytes, but the tool needs at least "+(OFFSET+LENGTH).toLocaleString()+" bytes. It is probably not a full SD card image.");
+    return;
+  }
+  let buf;
+  try{
+    // Only this slice is ever read into memory; the rest of the file is untouched.
+    buf = await file.slice(OFFSET, OFFSET+LENGTH).arrayBuffer();
+  }catch(e){
+    showError("The browser was unable to read the file ("+(e && e.message || e)+"). Try again or use a different browser.");
+    return;
+  }
+  const hash = await sha256Hex(buf);
+  const match = Object.prototype.hasOwnProperty.call(KNOWN_HASHES,hash) ? KNOWN_HASHES[hash] : null;
+  $("status").innerHTML="";
+
+  let html;
+  if(match){
+    html='<div class="card ok"><span class="badge">Supported device found</span><h2>'+esc(match.name||"Recognized image")+'</h2>'
+      +'<div class="hash">'+hash+'</div>'
+      +'<a class="btn" id="dl-known" href="'+esc(match.url)+'" target="_blank" rel="noopener">Download goodluckOS</a>'
+      +'<button class="btn alt" type="button" id="copy">Copy SHA-256 hash</button></div>';
+  }else{
+    blobUrl=URL.createObjectURL(new Blob([buf],{type:"application/octet-stream"}));
+    html='<div class="card warn"><span class="badge">Your device is not yet supported</span>'
+      +'<p>Please download the script.bin below and send it to us via a <a href="https://github.com/CodeZombie/goodluckOS/issues">Github Issue</a> so we can add support for it.</p>'
+      +'<div class="hash">'+hash+'</div>'
+      +'<a class="btn" id="dl-slice" href="'+blobUrl+'" download="script-'+hash.slice(0,12)+'.bin">Download your script.bin</a>'
+      +'<button class="btn alt" type="button" id="copy">Copy SHA-256 hash</button></div>';
+  }
+  $("result").innerHTML=html;
+  $("copy").onclick=async()=>{
+    try{await navigator.clipboard.writeText(hash);$("copy").textContent="Copied"}
+    catch(e){const r=document.createRange();r.selectNodeContents(document.querySelector(".hash"));const s=getSelection();s.removeAllRanges();s.addRange(r);$("copy").textContent="Selected, press Ctrl+C"}
+  };
+}
+
+function initFoldableElements() {
+  const foldables = document.querySelectorAll('.foldable');
+
+  foldables.forEach(foldable => {
+    const contents = foldable.querySelectorAll('.content');
+
+    contents.forEach(content => {
+      content.style.display = 'none';
+    });
+
+    const header = foldable.querySelector('h2');
+
+    if (header) {
+      header.addEventListener('click', () => {
+        contents.forEach(content => {
+          content.style.display = content.style.display === 'none' ? 'block' : 'none';
+        });
+      });
+    }
+  });
+}
+
+const drop=$("drop");
+$("file").addEventListener("change",e=>handle(e.target.files[0]));
+["dragenter","dragover"].forEach(t=>drop.addEventListener(t,e=>{e.preventDefault();drop.classList.add("over")}));
+["dragleave","drop"].forEach(t=>drop.addEventListener(t,e=>{e.preventDefault();drop.classList.remove("over")}));
+drop.addEventListener("drop",e=>handle(e.dataTransfer.files[0]));
+// Prevent the browser from navigating to a file dropped outside the zone
+["dragover","drop"].forEach(t=>window.addEventListener(t,e=>e.preventDefault()));
+document.addEventListener('DOMContentLoaded', initFoldableElements);
+</script>
+</body>
+</html>

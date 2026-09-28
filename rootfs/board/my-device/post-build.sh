@@ -22,21 +22,24 @@ mv ${TARGET_DIR}/etc/init.d/S10triggerhappy ${TARGET_DIR}/etc/init.d/S99triggerh
 
 mkdir ${TARGET_DIR}/etc/player-flags
 
-SHUTDOWN_LINE='::shutdown:/etc/init.d/S99puppy-bootstrap stop'
+# SHUTDOWN_LINE='::shutdown:/etc/init.d/S99puppy-bootstrap stop'
 
-if [ -f "${INITTAB}" ]; then
-    if ! grep -qF 'puppy-bootstrap.pid' "${INITTAB}"; then
-        RCK_LINE='::shutdown:/etc/init.d/rcK'
-        if grep -qF "${RCK_LINE}" "${INITTAB}"; then
-            # Insert this right before the "::shutdown:/etc/init.d/rcK" line
-            ESCAPED_LINE=$(printf '%s\n' "${SHUTDOWN_LINE}" | sed 's/[&/\]/\\&/g')
-            sed -i "\#${RCK_LINE}#i ${ESCAPED_LINE}" "${INITTAB}"
-            echo "post-build.sh: inserted puppy-bootstrap shutdown line into inittab"
-        else
-            echo "post-build.sh: WARNING: rcK shutdown line not found in inittab, appending puppy-bootstrap line at end instead"
-            echo "${SHUTDOWN_LINE}" >> "${INITTAB}"
-        fi
-    fi
-else
-    echo "post-build.sh: WARNING: ${INITTAB} not found, skipping puppy-bootstrap shutdown line injection"
-fi
+# if [ -f "${INITTAB}" ]; then
+#     if ! grep -qF 'puppy-bootstrap.pid' "${INITTAB}"; then
+#         RCK_LINE='::shutdown:/etc/init.d/rcK'
+#         if grep -qF "${RCK_LINE}" "${INITTAB}"; then
+#             # Insert this right before the "::shutdown:/etc/init.d/rcK" line
+#             ESCAPED_LINE=$(printf '%s\n' "${SHUTDOWN_LINE}" | sed 's/[&/\]/\\&/g')
+#             sed -i "\#${RCK_LINE}#i ${ESCAPED_LINE}" "${INITTAB}"
+#             echo "post-build.sh: inserted puppy-bootstrap shutdown line into inittab"
+#         else
+#             echo "post-build.sh: WARNING: rcK shutdown line not found in inittab, appending puppy-bootstrap line at end instead"
+#             echo "${SHUTDOWN_LINE}" >> "${INITTAB}"
+#         fi
+#     fi
+# else
+#     echo "post-build.sh: WARNING: ${INITTAB} not found, skipping puppy-bootstrap shutdown line injection"
+# fi
+
+
+echo "::respawn:/usr/local/bin/power-manager.sh" >> "$INITTAB"

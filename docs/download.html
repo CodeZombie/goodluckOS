@@ -312,10 +312,11 @@ progress {
 <script>
 "use strict";
 const OFFSET = 20340736;
-const LENGTH = 131072;
+//const LENGTH = 131072;
+const MAX_LENGTH = 131072;
 
 const KNOWN_HASHES = {
-  "28a4a8b90629f0023cc7f7193ea93745ab56e7d0b184932bb3aa9470cd33b3fc": {
+  "4bdfa6b7deacf59d821063accdd5bf7789c70d240dc695fffa3e16f2e83dba6c": {
     name: "GA36-MB v1.2 20260416 (Variant A)",
     url: "https://github.com/CodeZombie/goodluckOS/releases/download/v0.0.1/goodluckOS-v0.0.1-GA36-MB-v1.2-20260416-Variant-A.zip"
   }
@@ -341,20 +342,86 @@ function showError(msg){
   $("result").innerHTML='<div class="card err" role="alert"><h2>Could not read this file</h2><p>'+esc(msg)+'</p></div>';
 }
 
+const HEADER_SIZE = 16;      // sections(4) + filesize(4) + version[2](8)
+const SECTION_STRUCT = 40;   // name[32] + length(4) + offset(4)
+const ENTRY_STRUCT = 40;     // name[32] + offset(4) + pattern(4)
+const SECTION_LIMIT = 0x100; // sanity-limit pulled from sunxi-tools' code
+
+function computeScriptBinLength(buf) {
+  const dv = new DataView(buf);
+  const bufLen = buf.byteLength;
+
+  if (bufLen < HEADER_SIZE) throw new Error("Region too short for a script.bin header");
+
+  const sections = dv.getUint32(0, true); // little-endian
+  if (sections > SECTION_LIMIT) {
+    throw new Error(`Unreasonable section count (${sections}); this probably isn't script.bin`);
+  }
+
+  let maxEnd = HEADER_SIZE + sections * SECTION_STRUCT;
+  if (maxEnd > bufLen) throw new Error("Section table runs past the end of the region");
+
+  for (let i = 0; i < sections; i++) {
+    const secOff = HEADER_SIZE + i * SECTION_STRUCT;
+    const entryCount = dv.getInt32(secOff + 32, true);
+    const entryTableWordOffset = dv.getInt32(secOff + 36, true);
+    const entryTableByteOffset = entryTableWordOffset * 4;
+
+    if (entryCount < 0 || entryTableByteOffset < 0) {
+      throw new Error(`Malformed section ${i}: negative length/offset`);
+    }
+
+    const entryTableEnd = entryTableByteOffset + entryCount * ENTRY_STRUCT;
+    if (entryTableEnd > bufLen) throw new Error(`Section ${i}'s entry table runs past the region`);
+    maxEnd = Math.max(maxEnd, entryTableEnd);
+
+    for (let j = 0; j < entryCount; j++) {
+      const entOff = entryTableByteOffset + j * ENTRY_STRUCT;
+      const dataWordOffset = dv.getInt32(entOff + 32, true);
+      const pattern = dv.getUint32(entOff + 36, true);
+      const wordCount = pattern & 0xffff;
+      const dataByteOffset = dataWordOffset * 4;
+
+      if (dataByteOffset < 0) throw new Error(`Malformed entry ${i}.${j}: negative data offset`);
+
+      const dataEnd = dataByteOffset + wordCount * 4;
+      if (dataEnd > bufLen) throw new Error(`Entry ${i}.${j}'s data runs past the region`);
+      maxEnd = Math.max(maxEnd, dataEnd);
+    }
+  }
+
+  return maxEnd; // exact byte length of the real script.bin content
+}
+
 async function handle(file){
   if(!file) return;
   if(blobUrl){URL.revokeObjectURL(blobUrl);blobUrl=null}
   $("result").innerHTML="";
   $("status").innerHTML='<div class="card"><p style="margin:0 0 .5rem">Reading and hashing '+esc(file.name)+'…</p><progress aria-label="Working"></progress></div>';
 
-  if(file.size < OFFSET+LENGTH){
-    showError("This file is "+file.size.toLocaleString()+" bytes, but the tool needs at least "+(OFFSET+LENGTH).toLocaleString()+" bytes. It is probably not a full SD card image.");
+  if (file.size < OFFSET + HEADER_SIZE) {
+    showError("This file is " + file.size.toLocaleString() + " bytes, too short to contain a script.bin header at byte " + OFFSET.toLocaleString() + ". It is probably not a full SD card image.");
     return;
   }
+  let fullBuf;
+  try {
+    fullBuf = await file.slice(OFFSET, OFFSET + MAX_LENGTH).arrayBuffer();
+  } catch (e) {
+    showError("The browser was unable to read the file (" + (e && e.message || e) + "). Try again or use a different browser.");
+    return;
+  }
+
+  let length;
+  try {
+    length = computeScriptBinLength(fullBuf);
+  } catch (e) {
+    console.warn("Falling back to the raw region:", e);
+    length = fullBuf.byteLength;
+  }
+
   let buf;
   try{
-    // Only this slice is ever read into memory; the rest of the file is untouched.
-    buf = await file.slice(OFFSET, OFFSET+LENGTH).arrayBuffer();
+    buf = await file.slice(OFFSET, OFFSET+length).arrayBuffer();
   }catch(e){
     showError("The browser was unable to read the file ("+(e && e.message || e)+"). Try again or use a different browser.");
     return;
@@ -364,13 +431,14 @@ async function handle(file){
   $("status").innerHTML="";
 
   let html;
+  blobUrl=URL.createObjectURL(new Blob([buf],{type:"application/octet-stream"}));
   if(match){
     html='<div class="card ok"><span class="badge">Supported device found</span><h2>'+esc(match.name||"Recognized image")+'</h2>'
       +'<div class="hash">'+hash+'</div>'
       +'<a class="btn" id="dl-known" href="'+esc(match.url)+'" target="_blank" rel="noopener">Download goodluckOS</a>'
+      +'<a class="btn alt" id="dl-slice" href="'+blobUrl+'" download="script-'+hash.slice(0,12)+'.bin">Download your script.bin</a>'
       +'<button class="btn alt" type="button" id="copy">Copy SHA-256 hash</button></div>';
   }else{
-    blobUrl=URL.createObjectURL(new Blob([buf],{type:"application/octet-stream"}));
     html='<div class="card warn"><span class="badge">Your device is not yet supported</span>'
       +'<p>Please download the script.bin below and send it to us via a <a href="https://github.com/CodeZombie/goodluckOS/issues">Github Issue</a> so we can add support for it.</p>'
       +'<div class="hash">'+hash+'</div>'

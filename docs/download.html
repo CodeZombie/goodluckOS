@@ -2,490 +2,636 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>goodluckOS Hardware Identifier</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>goodluckOS Firmware Builder</title>
+<script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.9/dist/cdn.min.js"></script>
+
 <style>
-:root {
-  --bg: #111111;
-  --panel: #1a1a1a;
-  --ink: #f2f2f2;
-  --muted: #9a9a9a;
-  --line: #333333;
-  --accent: #408EE0;
-  --accent-ink: #111111;
-  --ok: #4caf50;
-  --okbg: #16281a;
-  --warn: #c62828;
-  --warnbg: #2a1710;
-  --err: #c62828;
-  --errbg: #2a1414;
-  --focus: #e0b020;
-}
-
-* {
-  box-sizing: border-box;
-}
-
-body {
-  margin: 0;
-  background: var(--bg);
-  color: var(--ink);
-  font: 1rem/1.6 "Segoe UI", system-ui, -apple-system, Roboto, sans-serif;
-  min-height: 100vh;
-  display: flex;
-  justify-content: center;
-  padding: 2rem 1rem;
-}
-
-main {
-  width: 100%;
-  max-width: 60rem;
-}
-
-h1 {
-  font-size: 1.75rem;
-  font-weight: 700;
-  margin: 0 0 0.25rem;
-  letter-spacing: -0.01em;
-  color: var(--ink);
-}
-
-a:not(.btn) {
-  color: var(--accent);
-  margin: 0 0 1.5rem;
-}
-
-a:visited:not(.btn) {
-  color: var(--accent);
-  margin: 0 0 1.5rem;
-}
-
-.code {
-  color: var(--accent-ink);
-  background: var(--muted);
-  padding-top: 0.1rem;
-  padding-bottom: 0.1rem;
-  padding-left: 0.5rem;
-  padding-right: 0.5rem;
-  border-radius: 6px;
-  font-family: ui-monospace, "Courier New", monospace;
-}
-
-.foldable .content {
-  display: none;
-  background: var(--line);
-  padding-top:0.5rem;
-  padding-bottom:0.5rem;
-}
-
-.foldable h2 {
-    background: var(--panel);
-    padding:0.5rem;
-    margin-bottom: 0;
-}
-
-.foldable h2:hover {
-  background: var(--line);
-  cursor: pointer;
-}
-
-.lead {
-  color: var(--muted);
-  margin: 0 0 1.5rem;
-}
-
-.drop {
-  display: block;
-  border: 2px dashed var(--line);
-  background: var(--panel);
-  padding: 2.5rem 1.5rem;
-  text-align: center;
-  cursor: pointer;
-  transition: background 0.15s, border-color 0.15s;
-  margin-top: 1rem;
-}
-
-.drop:hover,
-.drop.over {
-  background: var(--panel);
-  border-color: var(--accent);
-}
-
-.drop:focus-within {
-  outline: 3px solid var(--focus);
-  outline-offset: 3px;
-}
-
-.drop input {
-  position: absolute;
-  opacity: 0;
-  width: 1px;
-  height: 1px;
-}
-
-.drop strong {
-  display: block;
-  font-size: 1.15rem;
-}
-
-.drop span {
-  color: var(--muted);
-}
-
-.card {
-  background: var(--panel);
-  border: 1px solid var(--line);
-  padding: 1.25rem 1.5rem;
-  margin-top: 1.25rem;
-}
-
-.card h2 {
-  font-size: 1.1rem;
-  margin: 0 0 0.75rem;
-}
-
-.badge {
-  display: inline-block;
-  font-weight: 600;
-  padding: 0.15rem 0.7rem;
-  border-radius: 2rem;
-  font-size: 0.9rem;
-  margin-bottom: 0.75rem;
-}
-
-.ok {
-  border-color: var(--ok);
-}
-
-.ok .badge {
-  background: var(--okbg);
-  color: var(--ok);
-}
-
-.warn {
-  border-color: var(--warn);
-}
-
-.warn .badge {
-  background: var(--warnbg);
-  color: var(--warn);
-}
-
-.err {
-  border-color: var(--err);
-  background: var(--errbg);
-  color: var(--err);
-}
-
-.hash {
-  font: 0.95rem/1.5 ui-monospace, Consolas, monospace;
-  word-break: break-all;
-  background: var(--bg);
-  border: 1px solid var(--line);
-  border-radius: 0.4rem;
-  padding: 0.7rem 0.9rem;
-  margin: 0.4rem 0 0.9rem;
-  user-select: all;
-}
-
-dl {
-  margin: 0 0 1rem;
-}
-
-dt {
-  color: var(--muted);
-  font-size: 0.9rem;
-}
-
-dd {
-  margin: 0 0 0.5rem;
-  font-weight: 600;
-}
-
-.btn {
-  display: inline-block;
-  font: inherit;
-  font-weight: 600;
-  background: var(--accent);
-  color: var(--accent-ink);
-  border: 2px solid var(--accent);
-  border-radius: 0.4rem;
-  padding: 0.55rem 1.1rem;
-  text-decoration: none;
-  cursor: pointer;
-  margin: 0 0.5rem 0.5rem 0;
-}
-
-.ok .btn {
-  background: var(--ok);
-  border-color: var(--ok);
-}
-
-.warn .btn {
-  background: var(--warn);
-  border-color: var(--warn);
-}
-
-.btn.alt {
-  background: transparent;
-  color: var(--accent);
-}
-
-.ok .btn.alt {
-  color: var(--ok);
-}
-
-.warn .btn.alt {
-  color: var(--warn);
-}
-
-.btn:hover {
-  filter: brightness(1.1);
-}
-
-.btn:focus-visible,
-a:focus-visible {
-  outline: 3px solid var(--focus);
-  outline-offset: 2px;
-}
-
-progress {
-  width: 100%;
-  height: 0.7rem;
-  accent-color: var(--accent);
-}
-
-[hidden] {
-  display: none !important;
-}
-
-.foot {
-  color: var(--muted);
-  font-size: 0.85rem;
-  margin-top: 1.5rem;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  * {
-    transition: none !important;
+  :root {
+    box-sizing: border-box;
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    --bg: #f6f6f4;
+    --fg: #1c1c1a;
+    --card: #fff;
+    --card-muted: #fff;
+    --border: #d4d4cf;
+    --muted: #6b6b65;
+    --accent: #2a6df4;
+    --ok: #1a7f37;
+    --info: #EEDC82;
+    --bad: #c62828;
   }
-}
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #161615;
+      --fg: #ecece8;
+      --card: #1f1f1d;
+      --card-muted: #1a1a19;
+      --border: #3a3a36;
+      --muted: #9a9a92;
+      --accent: #6ea0ff;
+      --ok: #4cc26a;
+      --info: #EEDC82;
+      --bad: #ff6b6b;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #161615;
+    --fg: #ecece8;
+    --card: #1f1f1d;
+    --card-muted: #1a1a19;
+    --border: #3a3a36;
+    --muted: #9a9a92;
+    --accent: #6ea0ff;
+    --ok: #4cc26a;
+    --info: #EEDC82;
+    --bad: #ff6b6b;
+  }
+  html {
+      /* THE KNOB: 100% = 16px. Try 125%, 137.5%, 150%... everything scales. */
+      font-size: 125%;
+      scroll-padding-top: env(safe-area-inset-top, 0px);
+  }
+  [x-cloak] {
+      display: none !important;
+  }
+  body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--fg);
+      font: 1rem/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  main {
+      max-width: 45rem;
+      margin: 0 auto;
+      padding: 1.25rem 1rem 3.75rem;
+  }
+  h1 {
+      font-size: 2rem;
+      margin: 0 0 0.25rem;
+  }
+  h2 {
+      font-size: 0.875rem;
+      margin: 1.5rem 0 0.5rem;
+      text-transform: uppercase;
+      letter-spacing: .05em;
+      color: var(--muted);
+  }
+  .subtitle {
+      color: var(--muted);
+      margin: 0 0 0.5rem;
+  }
+
+  /* Drop zones */
+  .drop {
+      display: block;
+      flex: 1;
+      min-width: 0;
+      margin: 0.5rem 0;
+      padding: 0.75rem 0.875rem;
+      cursor: pointer;
+      background: var(--card);
+      border: 2px dashed var(--border);
+      border-radius: 0.625rem;
+      text-align: center;
+  }
+  .drop.over {
+      border-color: var(--accent);
+  }
+  .drop.done {
+      border-style: solid;
+      border-color: var(--ok);
+  }
+  .drop b {
+      display: block;
+  }
+  .drop span {
+      color: var(--muted);
+      font-size: 0.8125rem;
+      word-break: break-all;
+  }
+  .drop input {
+      display: none;
+  }
+  .row {
+      display: flex;
+      gap: 0.625rem;
+      align-items: stretch;
+  }
+  a.square {
+      flex: none;
+      width: 3.375rem;
+      margin: 0.5rem 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--accent);
+      text-decoration: none;
+      background: var(--card);
+      border: 2px dashed var(--border);
+      border-radius: 0.625rem;
+  }
+  a.square:hover {
+      border-color: var(--accent);
+  }
+
+  /* Buttons and log */
+  button,.button {
+      background: var(--accent);
+      color: #fff;
+      border: 0;
+      border-radius: 0.5rem;
+      padding: 0.625rem 1.125rem;
+      font-size: 0.9375rem;
+      cursor: pointer;
+      margin-bottom: 0.5rem;
+  }
+  button:disabled,.button.disabled {
+      opacity: .4;
+      cursor: not-allowed;
+  }
+  button.secondary,.button.secondary {
+      margin-top: 0.625rem;
+      padding: 0.5rem 0.875rem;
+      font-size: 0.875rem;
+      background: var(--card);
+      color: var(--fg);
+      border: 1px solid var(--border);
+  }
+  .log {
+      min-height: 1rem;
+      padding: 0.625rem;
+      background: var(--card-muted);
+      border: 1px solid var(--border);
+      border-radius: 0.125rem;
+      font: 0.78125rem/1.5 ui-monospace, Menlo, monospace;
+      word-break: break-all;
+  }
+  .info-panel {
+      padding: 0.625rem;
+      background: #141414;
+      border: 1px solid var(--info);
+      border-radius: 0.125rem;
+      margin-bottom: 1rem;
+  }
+  .info-panel > p,h4 {
+      margin-top: 0;
+      margin-bottom: 0.5rem;
+  }
+  .info-panel > h4 {
+      color: var(--info);
+  }
+  .info-panel > ol {
+      margin: 0;
+      padding-left: 1rem;
+  }
+  .info-panel > a,a:visited {
+      color: var(--muted);
+  }
+  .info-panel > a:hover,a:visited:hover {
+      color: var(--info);
+  }
+  .code {
+    color: var(--ok);
+    background: var(--card-muted);
+    padding-top: 0.1rem;
+    padding-bottom: 0.1rem;
+    padding-left: 0.5rem;
+    padding-right: 0.5rem;
+    border-radius: 0.375rem;
+    font-family: ui-monospace, "Courier New", monospace;
+  }
+  .ok {
+      color: var(--ok);
+  }
+  .bad {
+      color: var(--bad);
+  }
+  .override {
+      display: block;
+      margin-top: 0.625rem;
+      font-size: 0.8125rem;
+      color: var(--muted);
+  }
+  .download {
+      display: inline-block;
+      text-decoration: none;
+  }
+  .disabled { opacity: 50%;}
+  .subhead {
+      transition: color 0.3s ease;
+      color: var(--border);
+      cursor: pointer;
+      float:right;
+  }
+  .subhead:hover {
+      color: var(--info);
+  }
+  .active-step {
+      box-sizing: border-box;
+      padding-left: 1rem;
+      border-left-style: solid;
+      border-left-width: 0.375rem;
+      border-color: var(--info);
+  }
 </style>
 </head>
+
 <body>
-<main>
-  <h1>goodluckOS Hardware Identifier</h1>
-  <p class="lead">This tool will identify which hardware variant you have and, if supported, will provide you with the correct download link for goodluckOS.</p>
-  <p class="lead">If your device is not supported, PLEASE do not download a random release and try to boot it. It will almost certainly fail and, while unlikely, could damage your hardware.</p>
-
-  <div class="foldable">
-      <h2>Q: How do I use this?</h2>
-      <div class="content">
+<main x-data="builder" x-cloak @file-chosen="onFile">
+  <h1>goodluckOS Firmware Builder</h1>
+  <p class="subtitle">Identify your hardware and build your own bootable goodluckOS firmware image.</p>
+  <div x-data="{helpOpen: false}" :class="{'active-step': !step1Complete}">
+    <h3>Step 1: Load your SD Card Image <span class="subhead" @click="helpOpen = ! helpOpen">Help</span></h3>
+    <div class="info-panel" x-show="helpOpen">
+        <p>For this step, you'll need an image of the stock microSD card that came with your GA36-MB. You only need the first 128mb, but if the image is larger that's fine.</p>
+        <h4>Windows Guide</h4>
+        <p>Plug the microSD card into your PC with an adapter and create an image with <a href="https://sourceforge.net/projects/win32diskimager/">win32diskimager</a></p>
+        <h4>Linux Guide</h4>
         <ol>
-            <li>Dump your stock SD card (the one that came with your device) to a file.</li>
-            <li>Drop that sd card dump file onto this page.</li>
-            <li>The page will extract the hardware configuration file (script.bin) and compare it to a list of suported hardware profiles.</li>
-            <li>If it finds a match, it'll show you a download link</li>
-            <li>If no match is found, it'll provide you with a download link for the script.bin file. Please create an <a href="https://github.com/CodeZombie/goodluckOS/issues">Issue on Github</a> with information about your device, and upload the provided script.bin file. We can use this to build a version of goodluckOS for your device.</li>
+            <li>Plug your microSD card into your computer</li>
+            <li>Run <span class="code">lsblk</span> to find the path to your device file. It'll look like <span class="code">/dev/sdx</span></li>
+            <li>Run <span class="code">dd if=/dev/sdx of=stock_sdcard.img bs=1M count=128 status=progress</span>, where <span class="code">/dev/sdx</span> is the path you found in the previous step.</li>
         </ol>
-      </div>
-  </div>
-  <div class="foldable">
-      <h2>Q: How do I create an image of my stock microSD card?</h2>
-      <div class="content">
-          <ul>
-              <li>If you're using windows, use <a href="https://sourceforge.net/projects/win32diskimager/">win32diskimager</a>.</li>
-              <li>If you use Linux, find the device file for your microSD card with <span class="code">lsblk</span> and then run <span class="code">dd if=/dev/sdX of=stock_sdcard.img bs=1M count=128 status=progress</your></span>, where <span class="code">/dev/sdX</span> is your specific device file.</li>
-          </ul>
-      </div>
+    </div>
+    <div x-data="dropzone" data-kind="stock" @dragover.prevent="dragOver" @dragleave="dragLeave" @drop.prevent="drop">
+        <label class="drop" :class="cssClass">
+        <b>Your original SD card dump</b>
+        <span x-text="label"></span>
+        <input type="file" @change="pick">
+        </label>
+    </div>
+        <div class="log" x-show="!step1Logs.isEmpty">
+            <template x-for="line in step1Logs.lines">
+                <div>
+                    <template x-if="line.severity == 'link'">
+                        <a style="margin-left:2rem;" :href="line.text" x-text="line.text"></a>
+                    </template>
+                    <template x-if="line.severity != 'link'">
+                        <div :class="line.severity" x-text="line.text"></div>
+                    </template>
+                </div>
+            </template>
+        </div>
+    <button class="secondary" x-show="hasScriptBin" @click="downloadScriptBin">
+        Download your script.bin
+    </button>
   </div>
 
-  <label class="drop" id="drop">
-    <input type="file" id="file">
-    <strong>Drop your Stock SD Card image file here</strong>
-  </label>
+  <div x-show="step1Complete" :class="{'active-step': !step2Complete}" x-data="{helpOpen: false}">
+    <h3>Step 2: Download, Unzip and Load <span x-text="desiredGoodluckBaseImageFileName"></span><span class="subhead" @click="helpOpen = ! helpOpen">help</span></h3>
+    <div class="info-panel" x-show="helpOpen">
+        <p>You can download this file from <a href="https://github.com/CodeZombie/goodluckOS/releases">https://github.com/CodeZombie/goodluckOS/releases</a> or use the Download button below.</p>
+        <p>Be sure you download the correct version for your hardware! A33 builds are NOT compatible with A23 hardware and vice versa.</p>
 
-  <div id="status" role="status" aria-live="polite"></div>
-  <div id="result" aria-live="polite"></div>
+    </div>
+    <div class="row">
+        <a
+            class="square"
+            :href="latestImageUrl"
+            target="_blank"
+            rel="noopener"
+            title="Download the latest goodluck.img from GitHub releases"
+            aria-label="Download the latest goodluck.img from GitHub releases">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+            stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 3v12"/><path d="M7 11l5 5 5-5"/><path d="M5 20h14"/>
+        </svg>
+        </a>
+        <div x-data="dropzone" data-kind="base" @dragover.prevent="dragOver" @dragleave="dragLeave" @drop.prevent="drop" style="flex:1; min-width:0">
+        <label class="drop" :class="cssClass">
+            <b x-text="desiredGoodluckBaseImageFileName"></b>
+            <span x-text="label"></span>
+            <input type="file" @change="pick">
+        </label>
+        </div>
+    </div>
+    <div class="log" x-show="!step2Logs.isEmpty">
+      <template x-for="entry in step2Logs.lines">
+        <div :class="entry.severity" x-text="entry.text"></div>
+      </template>
+    </div>
+  </div>
+
+
+  <div x-show="step2Complete" :class="{'active-step': !step2Complete}">
+  <h3>Step 3: Download</h3>
+    <template x-if="output">
+      <a class="download button" :href="output.url" :download="output.name" x-text="output.label"></a>
+    </template>
+  </div>
 </main>
 
 <script>
-"use strict";
-const OFFSET = 20340736;
-//const LENGTH = 131072;
-const MAX_LENGTH = 131072;
+/* ==========================================================================
+   Configuration
+   ========================================================================== */
 
-const KNOWN_HASHES = {
-  "4bdfa6b7deacf59d821063accdd5bf7789c70d240dc695fffa3e16f2e83dba6c": {
-    name: "GA36-MB v1.2 20260416 Variant A",
-    url: "https://github.com/CodeZombie/goodluckOS/releases/download/v0.0.1/goodluckOS-v0.0.1-GA36-MB-v1.2-20260416-Variant-A.zip"
+
+const createLog = () => ({
+  lines: [],
+  addLine(text, severity="") {
+    this.lines.push({text, severity})
+  },
+  clear() {
+    this.lines = [];
+  },
+  get isEmpty() {
+    return this.lines.length === 0;
   }
-  // "f6b72e9705f528c42ca5bef7ee39fddfd9ddc5369d365c17324ca6d9f8770898": {
-  //   name: "GA36-MB v1.2 20260416 Variant B", // Variant B is compatible with the Variant A image.
-  //   url: "https://github.com/CodeZombie/goodluckOS/releases/download/v0.0.1/goodluckOS-v0.0.1-GA36-MB-v1.2-20260416-Variant-A.zip"
-  // }
+});
+console.log(createLog())
+const CONFIG = {
+  SECTOR: 512,
+
+  // The stock SD card supplies sectors [1, STOCK_END_SECTOR). goodluck.img
+  // supplies sector 0 (MBR) and everything from STOCK_END_SECTOR onward,
+  // which is where android_boot.img starts.
+  STOCK_END_SECTOR: 172032,
+
+  // Where the baked-in script.bin lives on the stock card, and how much to look at.
+  SCRIPT_BIN_OFFSET: 20340736,
+  SCRIPT_BIN_MAX_LENGTH: 131072,
+
+  GOODLUCK_BASE_IMAGE_URLS: {
+    "a33": "https://github.com/CodeZombie/goodluckOS/releases/latest/download/goodluckOS_base_a33.zip",
+    "a23": "https://github.com/CodeZombie/goodluckOS/releases/latest/download/goodluckOS_base_a23.zip"
+  },
+
+  // Script.bin hashes you have personally approved.
+  KNOWN_HASHES: {
+    "4bdfa6b7deacf59d821063accdd5bf7789c70d240dc695fffa3e16f2e83dba6c": {
+      name: "GA36-MB A33 Rhododendron",
+      soc: "A33"
+    },
+    "f6b72e9705f528c42ca5bef7ee39fddfd9ddc5369d365c17324ca6d9f8770898": {
+      name: "GA36-MB A33 Gecko",
+      soc: "A33"
+    }
+  }
 };
 
-const $ = id => document.getElementById(id);
+/* ==========================================================================
+   script.bin parsing (sunxi format)
+   ========================================================================== */
+const SCRIPT_BIN = {
+  HEADER_SIZE: 16,      // sections(4) + filesize(4) + version[2](8)
+  SECTION_STRUCT: 40,   // name[32] + length(4) + offset(4)
+  ENTRY_STRUCT: 40,     // name[32] + offset(4) + pattern(4)
+  SECTION_LIMIT: 0x100  // sanity limit taken from sunxi-tools
+};
 
-async function sha256Hex(buf){
-  if(window.crypto && crypto.subtle){
-    try{
-      const d=await crypto.subtle.digest("SHA-256",buf);
-      return Array.from(new Uint8Array(d),b=>b.toString(16).padStart(2,"0")).join("");
-    }catch(e){}
-  }
-  showError("Your browser doesn't seem to support crypto/subtle. Please update your browser, or try a different one.");
-}
+/** Walks the section/entry tables and returns the exact byte length of the script.bin content. */
+function computeScriptBinLength(buffer) {
+  const view = new DataView(buffer);
+  const size = buffer.byteLength;
+  const { HEADER_SIZE, SECTION_STRUCT, ENTRY_STRUCT, SECTION_LIMIT } = SCRIPT_BIN;
 
-function esc(s){const d=document.createElement("div");d.textContent=s;return d.innerHTML}
-let blobUrl=null;
+  if (size < HEADER_SIZE) throw new Error("Region too short for a script.bin header");
 
-function showError(msg){
-  $("status").innerHTML="";
-  $("result").innerHTML='<div class="card err" role="alert"><h2>Could not read this file</h2><p>'+esc(msg)+'</p></div>';
-}
-
-const HEADER_SIZE = 16;      // sections(4) + filesize(4) + version[2](8)
-const SECTION_STRUCT = 40;   // name[32] + length(4) + offset(4)
-const ENTRY_STRUCT = 40;     // name[32] + offset(4) + pattern(4)
-const SECTION_LIMIT = 0x100; // sanity-limit pulled from sunxi-tools' code
-
-function computeScriptBinLength(buf) {
-  const dv = new DataView(buf);
-  const bufLen = buf.byteLength;
-
-  if (bufLen < HEADER_SIZE) throw new Error("Region too short for a script.bin header");
-
-  const sections = dv.getUint32(0, true); // little-endian
+  const sections = view.getUint32(0, true); // little-endian
   if (sections > SECTION_LIMIT) {
     throw new Error(`Unreasonable section count (${sections}); this probably isn't script.bin`);
   }
 
   let maxEnd = HEADER_SIZE + sections * SECTION_STRUCT;
-  if (maxEnd > bufLen) throw new Error("Section table runs past the end of the region");
+  if (maxEnd > size) throw new Error("Section table runs past the end of the region");
 
   for (let i = 0; i < sections; i++) {
-    const secOff = HEADER_SIZE + i * SECTION_STRUCT;
-    const entryCount = dv.getInt32(secOff + 32, true);
-    const entryTableWordOffset = dv.getInt32(secOff + 36, true);
-    const entryTableByteOffset = entryTableWordOffset * 4;
+    const sectionOffset = HEADER_SIZE + i * SECTION_STRUCT;
+    const entryCount = view.getInt32(sectionOffset + 32, true);
+    const entryTableOffset = view.getInt32(sectionOffset + 36, true) * 4; // stored in 32-bit words
 
-    if (entryCount < 0 || entryTableByteOffset < 0) {
+    if (entryCount < 0 || entryTableOffset < 0) {
       throw new Error(`Malformed section ${i}: negative length/offset`);
     }
-
-    const entryTableEnd = entryTableByteOffset + entryCount * ENTRY_STRUCT;
-    if (entryTableEnd > bufLen) throw new Error(`Section ${i}'s entry table runs past the region`);
+    const entryTableEnd = entryTableOffset + entryCount * ENTRY_STRUCT;
+    if (entryTableEnd > size) throw new Error(`Section ${i}'s entry table runs past the region`);
     maxEnd = Math.max(maxEnd, entryTableEnd);
 
     for (let j = 0; j < entryCount; j++) {
-      const entOff = entryTableByteOffset + j * ENTRY_STRUCT;
-      const dataWordOffset = dv.getInt32(entOff + 32, true);
-      const pattern = dv.getUint32(entOff + 36, true);
-      const wordCount = pattern & 0xffff;
-      const dataByteOffset = dataWordOffset * 4;
+      const entryOffset = entryTableOffset + j * ENTRY_STRUCT;
+      const dataOffset = view.getInt32(entryOffset + 32, true) * 4;
+      const wordCount = view.getUint32(entryOffset + 36, true) & 0xffff;
 
-      if (dataByteOffset < 0) throw new Error(`Malformed entry ${i}.${j}: negative data offset`);
-
-      const dataEnd = dataByteOffset + wordCount * 4;
-      if (dataEnd > bufLen) throw new Error(`Entry ${i}.${j}'s data runs past the region`);
+      if (dataOffset < 0) throw new Error(`Malformed entry ${i}.${j}: negative data offset`);
+      const dataEnd = dataOffset + wordCount * 4;
+      if (dataEnd > size) throw new Error(`Entry ${i}.${j}'s data runs past the region`);
       maxEnd = Math.max(maxEnd, dataEnd);
     }
   }
-
-  return maxEnd; // exact byte length of the real script.bin content
+  return maxEnd;
 }
 
-async function handle(file){
-  if(!file) return;
-  if(blobUrl){URL.revokeObjectURL(blobUrl);blobUrl=null}
-  $("result").innerHTML="";
-  $("status").innerHTML='<div class="card"><p style="margin:0 0 .5rem">Reading and hashing '+esc(file.name)+'…</p><progress aria-label="Working"></progress></div>';
-
-  if (file.size < OFFSET + HEADER_SIZE) {
-    showError("This file is " + file.size.toLocaleString() + " bytes, too short to contain a script.bin header at byte " + OFFSET.toLocaleString() + ". It is probably not a full SD card image.");
-    return;
+async function sha256Hex(buffer) {
+  if (!(window.crypto && crypto.subtle)) {
+    throw new Error("This browser lacks crypto.subtle (needs HTTPS and a modern browser).");
   }
-  let fullBuf;
-  try {
-    fullBuf = await file.slice(OFFSET, OFFSET + MAX_LENGTH).arrayBuffer();
-  } catch (e) {
-    showError("The browser was unable to read the file (" + (e && e.message || e) + "). Try again or use a different browser.");
-    return;
-  }
-
-  let length;
-  try {
-    length = computeScriptBinLength(fullBuf);
-  } catch (e) {
-    console.warn("Falling back to the raw region:", e);
-    length = fullBuf.byteLength;
-  }
-
-  let buf;
-  try{
-    buf = await file.slice(OFFSET, OFFSET+length).arrayBuffer();
-  }catch(e){
-    showError("The browser was unable to read the file ("+(e && e.message || e)+"). Try again or use a different browser.");
-    return;
-  }
-  const hash = await sha256Hex(buf);
-  const match = Object.prototype.hasOwnProperty.call(KNOWN_HASHES,hash) ? KNOWN_HASHES[hash] : null;
-  $("status").innerHTML="";
-
-  let html;
-  blobUrl=URL.createObjectURL(new Blob([buf],{type:"application/octet-stream"}));
-  if(match){
-    html='<div class="card ok"><span class="badge">Supported device found</span><h2>'+esc(match.name||"Recognized image")+'</h2>'
-      +'<div class="hash">'+hash+'</div>'
-      +'<a class="btn" id="dl-known" href="'+esc(match.url)+'" target="_blank" rel="noopener">Download goodluckOS</a>'
-      +'<a class="btn alt" id="dl-slice" href="'+blobUrl+'" download="script-'+hash.slice(0,12)+'.bin">Download your script.bin</a>'
-      +'<button class="btn alt" type="button" id="copy">Copy SHA-256 hash</button></div>';
-  }else{
-    html='<div class="card warn"><span class="badge">Your device is not yet supported</span>'
-      +'<p>Please download the script.bin below and send it to us via a <a href="https://github.com/CodeZombie/goodluckOS/issues">Github Issue</a> so we can add support for it.</p>'
-      +'<div class="hash">'+hash+'</div>'
-      +'<a class="btn" id="dl-slice" href="'+blobUrl+'" download="script-'+hash.slice(0,12)+'.bin">Download your script.bin</a>'
-      +'<button class="btn alt" type="button" id="copy">Copy SHA-256 hash</button></div>';
-  }
-  $("result").innerHTML=html;
-  $("copy").onclick=async()=>{
-    try{await navigator.clipboard.writeText(hash);$("copy").textContent="Copied"}
-    catch(e){const r=document.createRange();r.selectNodeContents(document.querySelector(".hash"));const s=getSelection();s.removeAllRanges();s.addRange(r);$("copy").textContent="Selected, press Ctrl+C"}
-  };
+  const digest = await crypto.subtle.digest("SHA-256", buffer);
+  return Array.from(new Uint8Array(digest), b => b.toString(16).padStart(2, "0")).join("");
 }
 
-function initFoldableElements() {
-  const foldables = document.querySelectorAll('.foldable');
+/* ==========================================================================
+   Alpine components
+   ========================================================================== */
+document.addEventListener("alpine:init", () => {
 
-  foldables.forEach(foldable => {
-    const contents = foldable.querySelectorAll('.content');
+  /* A single file drop target. Reports the chosen file upward via a "file-chosen" event. */
+  Alpine.data("dropzone", () => ({
+    kind: "",
+    isOver: false,
+    file: null,
 
-    contents.forEach(content => {
-      content.style.display = 'none';
-    });
+    init() { this.kind = this.$el.dataset.kind; },
 
-    const header = foldable.querySelector('h2');
+    get label() {
+      if (!this.file) return "Drop a file here, or click to choose";
+      return `${this.file.name} (${(this.file.size / 1048576).toFixed(1)} MiB)`;
+    },
+    get cssClass() {
+      return this.file ? "done" : (this.isOver ? "over" : "");
+    },
 
-    if (header) {
-      header.addEventListener('click', () => {
-        contents.forEach(content => {
-          content.style.display = content.style.display === 'none' ? 'block' : 'none';
-        });
-      });
+    dragOver() { this.isOver = true; },
+    dragLeave() { this.isOver = false; },
+    drop(event) { this.isOver = false; this.accept(event.dataTransfer.files[0]); },
+    pick(event) { this.accept(event.target.files[0]); },
+
+    accept(file) {
+      if (!file) return;
+      this.file = file;
+      this.$dispatch("file-chosen", { kind: this.kind, file });
     }
-  });
-}
+  }));
 
-const drop=$("drop");
-$("file").addEventListener("change",e=>handle(e.target.files[0]));
-["dragenter","dragover"].forEach(t=>drop.addEventListener(t,e=>{e.preventDefault();drop.classList.add("over")}));
-["dragleave","drop"].forEach(t=>drop.addEventListener(t,e=>{e.preventDefault();drop.classList.remove("over")}));
-drop.addEventListener("drop",e=>handle(e.dataTransfer.files[0]));
-// Prevent the browser from navigating to a file dropped outside the zone
-["dragover","drop"].forEach(t=>window.addEventListener(t,e=>e.preventDefault()));
-document.addEventListener('DOMContentLoaded', initFoldableElements);
+  /* The main page: verification state, and image assembly. */
+  Alpine.data("builder", () => ({
+    stockFile: null,
+    baseFile: null,
+
+    step1Logs: createLog(),
+    step2Logs: createLog(),
+    scriptBlob: null,   // extracted script.bin bytes
+    variant: null,      // matched entry from KNOWN_HASHES
+    step1Complete: false,
+    step2Complete: false,
+    output: null,       // { url, name, label } once built
+
+    get latestImageUrl() {
+      if (!this.variant) {
+        return ""
+      }
+      return CONFIG.GOODLUCK_BASE_IMAGE_URLS[this.variant.soc.toLowerCase()];
+    },
+
+    get desiredGoodluckBaseImageFileName() {
+      if (!this.variant) {
+        return "goodluckOS_base_???.img"
+      }
+      return `goodluckOS_base_${this.variant.soc.toLowerCase()}.img`
+    },
+
+    /* ---- derived state ---- */
+    get hasScriptBin() { return this.scriptBlob !== null; },
+    get canBuild() {
+      return this.stockFile !== null && this.baseFile !== null && this.step2Complete && this.step1Complete;
+    },
+
+    /* ---- helpers ---- */
+    //log(category, text, cls = "") { this.logEntries[category].push({ text, cls }); },
+
+    /* ---- events ---- */
+    async onFile(event) {
+      const { kind, file } = event.detail;
+      if (kind === "stock") this.stockFile = file;
+      if (kind === "base") this.baseFile = file;
+
+      // Re-run all checks from scratch so the log always reflects current files.
+      this.step1Logs.clear();
+      this.step2Logs.clear();
+      this.output = null;
+      this.scriptBlob = null;
+      this.variant = null;
+
+
+      this.step1Complete = false;
+      this.step2Complete = false;
+
+      try {
+        if (this.stockFile) await this.checkStock(this.stockFile);
+      }  catch (error) {
+        this.step1Logs.addLine("ERROR: " + error.message, "bad");
+      }
+
+      try {
+        if (this.baseFile) await this.checkBase(this.baseFile);
+      } catch (error) {
+        this.step2Logs.addLine("ERROR: " + error.message, "bad");
+      }
+    },
+
+    /* ---- verification ---- */
+    async checkStock(file) {
+      const stockEnd = CONFIG.STOCK_END_SECTOR * CONFIG.SECTOR;
+      if (file.size < stockEnd) {
+        this.step1Logs.addLine(`Stock dump is ${file.size} bytes; need at least ${stockEnd}.`, "bad");
+        return;
+      }
+
+      const start = CONFIG.SCRIPT_BIN_OFFSET;
+      const region = await file.slice(start, start + CONFIG.SCRIPT_BIN_MAX_LENGTH).arrayBuffer();
+
+      let length;
+      try {
+        length = computeScriptBinLength(region);
+        this.step1Logs.addLine(`script.bin parsed: ${length} bytes`, "ok");
+      } catch (error) {
+        length = region.byteLength;
+        this.step1Logs.addLine(`script.bin parse failed (${error.message}); hashing raw region instead`, "bad");
+      }
+
+      const bytes = region.slice(0, length);
+      this.scriptBlob = new Blob([bytes], { type: "application/octet-stream" });
+
+      const hash = await sha256Hex(bytes);
+      this.step1Logs.addLine("script.bin SHA-256: " + hash);
+
+      const match = CONFIG.KNOWN_HASHES[hash];
+      if (match) {
+        this.variant = match;
+        this.step1Complete = true;
+        this.step1Logs.addLine("Approved variant: " + match.name, "ok");
+        this.step1Logs.addLine("Variant SoC: " + match.soc, "ok");
+      } else {
+        this.step1Logs.addLine("------------------------", "bad");
+        this.step1Logs.addLine("Unknown Hardware Variant", "bad");
+        this.step1Logs.addLine("------------------------", "bad");
+        this.step1Logs.addLine("Please save a copy of your script.bin file and submit it to us for review here:", "bad");
+        this.step1Logs.addLine("https://github.com/CodeZombie/goodluckOS/issues", "link");
+        this.step1Logs.addLine("If we determine that goodluckOS is safe to use with your device, we'll add support in this tool and notify you when it's ready.", "bad");
+      }
+    },
+
+    async checkBase(file) {
+      const kernelOffset = CONFIG.STOCK_END_SECTOR * CONFIG.SECTOR;
+      if (file.size <= kernelOffset) {
+        this.step2Logs.addLine(`ERROR: Provided file is too small to be a valid goodluckOS base image.`, "bad");
+        return;
+      }
+      const header = await file.slice(kernelOffset, kernelOffset + 8).arrayBuffer();
+      const magic = new TextDecoder().decode(header);
+      if (magic !== "ANDROID!") {
+        this.step2Logs.addLine(`ERROR: The provided file is not a goodluckOS base image because no ANDROID! boot image header was found at sector ${CONFIG.STOCK_END_SECTOR}.`, "bad");
+        return;
+      }
+      this.step2Complete = true;
+      this.step2Logs.addLine(`${file.name} OK (${(file.size / 1048576).toFixed(0)} MiB, boot image header found)`, "ok");
+
+      this.build();
+    },
+
+    /* ---- actions ---- */
+    downloadScriptBin() {
+      this.saveBlob(this.scriptBlob, "script.bin");
+    },
+
+    build() {
+      const { SECTOR, STOCK_END_SECTOR } = CONFIG;
+      const stockEnd = STOCK_END_SECTOR * SECTOR;
+
+      // Layout: [goodluck sector 0][stock sectors 1..N-1][goodluck from sector N onward]
+      const image = new Blob([
+        this.baseFile.slice(0, SECTOR),
+        this.stockFile.slice(SECTOR, stockEnd),
+        this.baseFile.slice(stockEnd)
+      ], { type: "application/octet-stream" });
+
+      if (image.size !== this.baseFile.size) {
+        this.step2Logs.addLine(`[Build] Size mismatch (${image.size} vs ${this.baseFile.size}); aborting.`, "bad");
+        return;
+      }
+
+      const suffix = this.variant ? this.variant.name.replace(/[^A-Za-z0-9]+/g, "-") : "unverified";
+      const name = `goodluckOS-${suffix}.img`;
+      this.output = {
+        url: URL.createObjectURL(image),
+        name,
+        label: `Download ${name} (${(image.size / 1048576).toFixed(0)} MiB)`
+      };
+      this.step3Complete = true;
+      this.step2Logs.addLine("[Build] Image assembled. Keep your original SD dump somewhere safe.", "ok");
+    },
+
+    saveBlob(blob, filename) {
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = filename;
+      link.click();
+      setTimeout(() => URL.revokeObjectURL(link.href), 10000);
+    }
+  }));
+});
 </script>
 </body>
 </html>

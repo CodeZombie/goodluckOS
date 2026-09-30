@@ -5,8 +5,8 @@
 #include <dt-bindings/leds/common.h>
 
 / {
-    model = "Unknown A33 Handheld";
-    compatible = "vendor,unknown-a33-handheld",
+    model = "GA36-MB A33";
+    compatible = "ga36mb,ga36mb-a33-handheld",
     "allwinner,sun8i-a33";
 
     aliases {

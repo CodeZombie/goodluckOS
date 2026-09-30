@@ -2,7 +2,8 @@
 
 mkdir -p ./staging
 
-cp ../kernel/out/android_boot.img ./staging/
+cp ../kernel/out/android_boot_a33.img ./staging/
+cp ../kernel/out/android_boot_a23.img ./staging/
 cp ../rootfs/out/images/rootfs.tar ./staging/
 cp ../home/out/home.tar ./staging/
 

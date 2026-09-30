@@ -145,9 +145,9 @@ config GA36MB_GAMEPAD\n\
 \t  Say Y here to enable support for the GA36-MB Gamepad.\n\
 ' drivers/input/joystick/Kconfig
 
-# DTS insertion
-COPY dts/sun8i-a33-ga36mb-v12.dts arch/arm/boot/dts/allwinner/
-RUN echo 'dtb-$(CONFIG_MACH_SUN8I) += sun8i-a33-ga36mb-v12.dtb' >> arch/arm/boot/dts/allwinner/Makefile
+COPY dts/sun8i-a33-ga36mb.dts arch/arm/boot/dts/allwinner/
+COPY dts/sun8i-a23-ga36mb.dts arch/arm/boot/dts/allwinner/
+RUN echo 'dtb-$(CONFIG_MACH_SUN8I) += sun8i-a33-ga36mb.dtb sun8i-a23-ga36mb.dtb\n' >> arch/arm/boot/dts/allwinner/Makefile
 
 RUN ./scripts/config --enable CONFIG_DRM_PANEL_JD9366 && \
     ./scripts/config --enable CONFIG_GA36MB_GAMEPAD && \
@@ -155,17 +155,27 @@ RUN ./scripts/config --enable CONFIG_DRM_PANEL_JD9366 && \
 
 RUN make -j$(nproc) zImage dtbs
 
-RUN cat arch/arm/boot/zImage arch/arm/boot/dts/allwinner/sun8i-a33-ga36mb-v12.dtb > arch/arm/boot/zImage_with_dtb
+RUN cat arch/arm/boot/zImage arch/arm/boot/dts/allwinner/sun8i-a33-ga36mb.dtb > arch/arm/boot/zImage_with_dtb_a33
+RUN cat arch/arm/boot/zImage arch/arm/boot/dts/allwinner/sun8i-a23-ga36mb.dtb > arch/arm/boot/zImage_with_dtb_a23
 
 RUN touch empty_ramdisk
 RUN mkbootimg \
-    --kernel arch/arm/boot/zImage_with_dtb \
+    --kernel arch/arm/boot/zImage_with_dtb_a33 \
     --ramdisk empty_ramdisk \
     --base 0x40000000 \
     --board sun8i \
     --pagesize 2048 \
-    -o /src/android_boot.img
+    -o /src/android_boot_a33.img
+
+RUN mkbootimg \
+    --kernel arch/arm/boot/zImage_with_dtb_a23 \
+    --ramdisk empty_ramdisk \
+    --base 0x40000000 \
+    --board sun8i \
+    --pagesize 2048 \
+    -o /src/android_boot_a23.img
 
 FROM scratch AS artifacts
-COPY --from=kernel_builder /src/android_boot.img ./android_boot.img
+COPY --from=kernel_builder /src/android_boot_a33.img ./android_boot_a33.img
+COPY --from=kernel_builder /src/android_boot_a23.img ./android_boot_a23.img
 COPY --from=kernel_builder /src/linux/.config ./kernel_config.txt

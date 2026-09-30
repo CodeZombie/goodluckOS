@@ -13,20 +13,23 @@ RUN apt-get update && \
 
 WORKDIR /workspace
 
-RUN truncate -s 1G goodluck.img && \
-    parted -a optimal -s goodluck.img \
+#######
+# A33 #
+#######
+RUN truncate -s 1G goodluck_a33.img && \
+    parted -a optimal -s goodluck_a33.img \
     mklabel msdos \
     mkpart primary ext4 128MiB 512MiB \
     mkpart primary fat32 512MiB 100%
 
-COPY sdcard.img ./
-RUN dd if=sdcard.img of=goodluck.img bs=512 skip=1 seek=1 count=262143 conv=notrunc
+# COPY sdcard.img ./
+RUN dd if=/dev/zero of=goodluck_a33.img bs=512 skip=1 seek=1 count=262143 conv=notrunc
 
-COPY staging/android_boot.img ./
-RUN dd if=android_boot.img of=goodluck.img bs=512 seek=172032 conv=notrunc
+COPY staging/android_boot_a33.img ./
+RUN dd if=android_boot_a33.img of=goodluck_a33.img bs=512 seek=172032 conv=notrunc
 
 COPY staging/rootfs.tar ./
-RUN guestfish -a goodluck.img <<EOF
+RUN guestfish -a goodluck_a33.img <<EOF
 run
 mkfs-opts ext4 /dev/sda1 label:linux
 mount /dev/sda1 /
@@ -34,9 +37,8 @@ tar-in rootfs.tar /
 umount /
 EOF
 
-# Create the home partition and extract home.tar into it.
 COPY staging/home.tar ./
-RUN guestfish -a goodluck.img <<EOF
+RUN guestfish -a goodluck_a33.img <<EOF
 run
 mkfs-opts vfat /dev/sda2 label:HOME
 mount /dev/sda2 /
@@ -45,13 +47,56 @@ umount /
 EOF
 
 # # Inject custom bootlogo
-COPY res/goodluck_bootlogo.bmp ./goodluck_bootlogo.bmp
-RUN guestfish -a goodluck.img <<EOF
+# COPY res/goodluck_bootlogo.bmp ./goodluck_bootlogo.bmp
+# RUN guestfish -a goodluck_a33.img <<EOF
+# run
+# mount-vfs "offset=37748736" "vfat" /dev/sda /
+# upload goodluck_bootlogo.bmp /bootlogo.bmp
+# umount /
+# EOF
+
+#######
+# A23 #
+#######
+RUN truncate -s 1G goodluck_a23.img && \
+    parted -a optimal -s goodluck_a23.img \
+    mklabel msdos \
+    mkpart primary ext4 128MiB 512MiB \
+    mkpart primary fat32 512MiB 100%
+
+# COPY sdcard.img ./
+RUN dd if=/dev/zero of=goodluck_a23.img bs=512 skip=1 seek=1 count=262143 conv=notrunc
+
+COPY staging/android_boot_a23.img ./
+RUN dd if=android_boot_a23.img of=goodluck_a23.img bs=512 seek=172032 conv=notrunc
+
+COPY staging/rootfs.tar ./
+RUN guestfish -a goodluck_a23.img <<EOF
 run
-mount-vfs "offset=37748736" "vfat" /dev/sda /
-upload goodluck_bootlogo.bmp /bootlogo.bmp
+mkfs-opts ext4 /dev/sda1 label:linux
+mount /dev/sda1 /
+tar-in rootfs.tar /
 umount /
 EOF
 
+COPY staging/home.tar ./
+RUN guestfish -a goodluck_a23.img <<EOF
+run
+mkfs-opts vfat /dev/sda2 label:HOME
+mount /dev/sda2 /
+tar-in home.tar /
+umount /
+EOF
+
+# # Inject custom bootlogo
+# COPY res/goodluck_bootlogo.bmp ./goodluck_bootlogo.bmp
+# RUN guestfish -a goodluck_a23.img <<EOF
+# run
+# mount-vfs "offset=37748736" "vfat" /dev/sda /
+# upload goodluck_bootlogo.bmp /bootlogo.bmp
+# umount /
+# EOF
+
 FROM scratch AS export
-COPY --from=builder /workspace/goodluck.img /
+COPY --from=builder /workspace/goodluck_a33.img /
+COPY --from=builder /workspace/goodluck_a23.img /

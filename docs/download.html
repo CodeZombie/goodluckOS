@@ -367,15 +367,28 @@ const CONFIG = {
   KNOWN_HASHES: {
     "4bdfa6b7deacf59d821063accdd5bf7789c70d240dc695fffa3e16f2e83dba6c": {
       name: "GA36-MB A33 Rhododendron",
-      soc: "A33"
+      soc: "A33",
+      supported: true
     },
     "f6b72e9705f528c42ca5bef7ee39fddfd9ddc5369d365c17324ca6d9f8770898": {
       name: "GA36-MB A33 Gecko",
-      soc: "A33"
+      soc: "A33",
+      supported: true
     },
     "ad0b836c8b3cc6dd2b3b0d8c1817e2fdfe9ed48998a3bed758a73603f05f96e1": {
       name: "GA36-MB A23 Esisla",
-      soc: "A23"
+      soc: "A23",
+      supported: false
+    },
+    "755aae75f7df87348a1427b94532e6a1ef758e3071fb5bf52f10a7f7032318e4": {
+      name: "GA36-MB A23 Underscore",
+      soc: "A23",
+      supported: false
+    },
+    "39a74a42c3d4f9d0599bf5f0db136a7f53bb6a072aa117eaae14e0f27872c798": {
+      name: "GA36-MB A23 Xeno",
+      soc: "A23",
+      supported: false
     }
   }
 };
@@ -565,10 +578,17 @@ document.addEventListener("alpine:init", () => {
 
       const match = CONFIG.KNOWN_HASHES[hash];
       if (match) {
-        this.variant = match;
-        this.step1Complete = true;
-        this.step1Logs.addLine("Approved variant: " + match.name, "ok");
-        this.step1Logs.addLine("Variant SoC: " + match.soc, "ok");
+        if (match.supported) {
+          this.variant = match;
+          this.step1Complete = true;
+          this.step1Logs.addLine("Approved variant: " + match.name, "ok");
+          this.step1Logs.addLine("Variant SoC: " + match.soc, "ok");
+        } else {
+          this.step1Logs.addLine("Unsupported variant: " + match.name, "bad");
+          this.step1Logs.addLine("Variant SoC: " + match.soc, "bad");
+          this.step1Logs.addLine("Your device is recognized, but not yet supported by goodluckOS.", "bad");
+          this.step1Logs.addLine("If you're feeling up to it, I'm looking to buy or loan A23-based GA36-MB devices from people like you! Send me an email or open an issue on github and we'll set something up.", "ok");
+        }
       } else {
         this.step1Logs.addLine("------------------------", "bad");
         this.step1Logs.addLine("Unknown Hardware Variant", "bad");

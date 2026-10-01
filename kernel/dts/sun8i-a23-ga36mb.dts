@@ -334,6 +334,9 @@
     axp22x: pmic@3a3 {
         compatible = "x-powers,axp223";
         reg = <0x3a3>;
+        // lets the kernel cut the power at the end of a shutdown; without it poweroff only halts
+        // the CPU, leaving the screen dark with the backlight on
+        x-powers,system-power-controller;
         interrupt-parent = <&r_intc>;
         interrupts = <GIC_SPI 32 IRQ_TYPE_LEVEL_LOW>;
     };

@@ -138,6 +138,7 @@
 
   /* Buttons and log */
   button,.button {
+      display: inline-block;
       background: var(--accent);
       color: #fff;
       border: 0;
@@ -152,7 +153,6 @@
       cursor: not-allowed;
   }
   button.secondary,.button.secondary {
-      margin-top: 0.625rem;
       padding: 0.5rem 0.875rem;
       font-size: 0.875rem;
       background: var(--card);
@@ -164,6 +164,7 @@
       padding: 0.625rem;
       background: var(--card-muted);
       border: 1px solid var(--border);
+      margin-bottom: 0.5rem;
       border-radius: 0.125rem;
       font: 0.78125rem/1.5 ui-monospace, Menlo, monospace;
       word-break: break-all;
@@ -243,7 +244,7 @@
   <h1>goodluckOS Firmware Builder</h1>
   <p class="subtitle">Identify your hardware and build your own bootable goodluckOS firmware image.</p>
   <div x-data="{helpOpen: false}" :class="{'active-step': !step1Complete}">
-    <h3>Step 1: Load your SD Card Image <span class="subhead" @click="helpOpen = ! helpOpen">Help</span></h3>
+    <h3>Step 1: Load your SD Card Image <span class="subhead" @click="helpOpen = ! helpOpen">help</span></h3>
     <div class="info-panel" x-show="helpOpen">
         <p>For this step, you'll need an image of the stock microSD card that came with your GA36-MB. You only need the first 128mb, but if the image is larger that's fine.</p>
         <h4>Windows Guide</h4>
@@ -284,6 +285,7 @@
     <div class="info-panel" x-show="helpOpen">
         <p>You can download this file from <a href="https://github.com/CodeZombie/goodluckOS/releases">https://github.com/CodeZombie/goodluckOS/releases</a> or use the Download button below.</p>
         <p>Be sure you download the correct version for your hardware! A33 builds are NOT compatible with A23 hardware and vice versa.</p>
+        <p>Uncheck "Replace MBR" if you do not want the firmware builder to replace the image's Master Boot Record. This may cause goodluckOS to not boot, and it may make the microSD card unmountable on your computer.</p>
 
     </div>
     <div class="row">
@@ -307,6 +309,12 @@
         </label>
         </div>
     </div>
+    <div>
+        <label for="checkbox" class="button secondary">
+            <input type="checkbox" id="checkbox" x-model="replaceMBR" x-on:change="rebuild">
+            Replace MBR
+        </label>
+    </div>
     <div class="log" x-show="!step2Logs.isEmpty">
       <template x-for="entry in step2Logs.lines">
         <div :class="entry.severity" x-text="entry.text"></div>
@@ -324,10 +332,6 @@
 </main>
 
 <script>
-/* ==========================================================================
-   Configuration
-   ========================================================================== */
-
 
 const createLog = () => ({
   lines: [],
@@ -341,7 +345,7 @@ const createLog = () => ({
     return this.lines.length === 0;
   }
 });
-console.log(createLog())
+
 const CONFIG = {
   SECTOR: 512,
 
@@ -368,6 +372,10 @@ const CONFIG = {
     "f6b72e9705f528c42ca5bef7ee39fddfd9ddc5369d365c17324ca6d9f8770898": {
       name: "GA36-MB A33 Gecko",
       soc: "A33"
+    },
+    "ad0b836c8b3cc6dd2b3b0d8c1817e2fdfe9ed48998a3bed758a73603f05f96e1": {
+      name: "GA36-MB A23 Esisla",
+      soc: "A23"
     }
   }
 };
@@ -477,6 +485,7 @@ document.addEventListener("alpine:init", () => {
     step1Complete: false,
     step2Complete: false,
     output: null,       // { url, name, label } once built
+    replaceMBR: true,
 
     get latestImageUrl() {
       if (!this.variant) {
@@ -497,9 +506,6 @@ document.addEventListener("alpine:init", () => {
     get canBuild() {
       return this.stockFile !== null && this.baseFile !== null && this.step2Complete && this.step1Complete;
     },
-
-    /* ---- helpers ---- */
-    //log(category, text, cls = "") { this.logEntries[category].push({ text, cls }); },
 
     /* ---- events ---- */
     async onFile(event) {
@@ -600,10 +606,19 @@ document.addEventListener("alpine:init", () => {
       const { SECTOR, STOCK_END_SECTOR } = CONFIG;
       const stockEnd = STOCK_END_SECTOR * SECTOR;
 
+      let startSector = 0;
+      if (this.replaceMBR) {
+        this.step2Logs.addLine(`[Build] Image will be built with replaced MBR`, "ok");
+        this.step2Logs.addLine(`[NOTE] If your device does not boot, try building an image again with "Replace MBR" disabled.`, "bad");
+        startSector = SECTOR;
+      } else {
+        this.step2Logs.addLine(`[Build] Image will be built WITHOUT "Replace MBR". Your SD Card may not mount on your PC!`, "bad");
+      }
+
       // Layout: [goodluck sector 0][stock sectors 1..N-1][goodluck from sector N onward]
       const image = new Blob([
-        this.baseFile.slice(0, SECTOR),
-        this.stockFile.slice(SECTOR, stockEnd),
+        this.baseFile.slice(0, startSector),
+        this.stockFile.slice(startSector, stockEnd),
         this.baseFile.slice(stockEnd)
       ], { type: "application/octet-stream" });
 
@@ -620,7 +635,14 @@ document.addEventListener("alpine:init", () => {
         label: `Download ${name} (${(image.size / 1048576).toFixed(0)} MiB)`
       };
       this.step3Complete = true;
-      this.step2Logs.addLine("[Build] Image assembled. Keep your original SD dump somewhere safe.", "ok");
+      this.step2Logs.addLine("[Build] Image successfully assembled.", "ok");
+    },
+
+    rebuild() {
+      if (this.step2Complete) {
+        this.step2Logs.clear();
+        this.build();
+      }
     },
 
     saveBlob(blob, filename) {

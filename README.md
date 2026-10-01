@@ -4,9 +4,9 @@ An uncompromisingly fast, small, modern, and feature-rich custom firmware for A2
 ## PLEASE READ
 goodluckOS is PRE-RELEASE software. There are no gaurantees that it will work on your hardware.
 
-Please visit [The Download Page/Hardware Identifier Tool](https://codezombie.github.io/goodluckOS/download.html) to see if your hardware is supported by goodluckOS. If it is, you can download goodluckOS from there.
+Please visit [The Firmware Builder](https://codezombie.github.io/goodluckOS/download.html). This will walk you through the steps of identifying if you have a compatible unit, and if so, easily building a bootable goodluckOS image.
 
-If the above page does not confirm support, please do not attempt to flash a goodluckOS image to your device. Doing so may damage your hardware. Instead, send us your `script.bin` file by making a new Issue here on github. The contents of that file will help us identify your device and add support for devices like it. Thank you!
+Please Note: At the time of writing, Allwinner-A23 based GA36-MB devices (which seem to be what most people have) are _not_ supported.
 
 ## Features
 - Mainline Linux 7.2

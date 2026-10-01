@@ -39,6 +39,12 @@ case "$1" in
   stop)
     echo "Stopping USB Serial Gadget..."
 
+    # With no USB cable the unbind below never returns, which hung every shutdown and reboot
+    # (rcK stops here). There is nothing to tear down before the power goes off anyway.
+    if [ "$(cat /sys/class/power_supply/axp20x-usb/online 2>/dev/null)" != "1" ]; then
+        exit 0
+    fi
+
     # Unbind from UDC
     echo "" > /sys/kernel/config/usb_gadget/g1/UDC
 

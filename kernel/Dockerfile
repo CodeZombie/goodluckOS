@@ -77,6 +77,7 @@ RUN ./scripts/config --enable CONFIG_ARM_APPENDED_DTB && \
     ./scripts/config --enable CONFIG_USB_CONFIGFS && \
     ./scripts/config --enable CONFIG_USB_CONFIGFS_SERIAL && \
     ./scripts/config --enable CONFIG_USB_CONFIGFS_ACM && \
+    ./scripts/config --enable CONFIG_USB_CONFIGFS_F_FS && \
     ./scripts/config --enable CONFIG_INPUT_KEYBOARD && \
     ./scripts/config --enable CONFIG_KEYBOARD_GPIO && \
     ./scripts/config --enable CONFIG_KEYBOARD_GPIO_POLLED && \

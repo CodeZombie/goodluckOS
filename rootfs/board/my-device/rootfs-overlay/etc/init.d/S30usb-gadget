@@ -1,8 +1,10 @@
 #!/bin/sh
 
+G=/sys/kernel/config/usb_gadget/g1
+
 case "$1" in
   start)
-    echo "Starting USB Serial Gadget..."
+    echo "Starting USB Gadget (serial + MTP)..."
 
     mount -t configfs none /sys/kernel/config 2>/dev/null
 
@@ -16,6 +18,11 @@ case "$1" in
     echo 0x0100 > bcdDevice
     echo 0x0200 > bcdUSB
 
+    # Composite device with interface association descriptors (needed by Windows for ACM + MTP)
+    echo 0xEF > bDeviceClass
+    echo 0x02 > bDeviceSubClass
+    echo 0x01 > bDeviceProtocol
+
     # Set English strings
     mkdir -p strings/0x409
     echo "0123456789" > strings/0x409/serialnumber
@@ -24,20 +31,32 @@ case "$1" in
 
     # Create the configuration
     mkdir -p configs/c.1/strings/0x409
-    echo "Serial" > configs/c.1/strings/0x409/configuration
+    echo "Serial + MTP" > configs/c.1/strings/0x409/configuration
     echo 250 > configs/c.1/MaxPower
 
-    # Instantiate the ACM function
+    # Serial console (ttyGS0)
     mkdir -p functions/acm.usb0
-
-    # Link the function to the configuration
     ln -s functions/acm.usb0 configs/c.1/
+
+    # MTP: HOME shows up on the PC as a folder. umtprd answers on FunctionFS.
+    if mkdir -p functions/ffs.mtp 2>/dev/null; then
+        ln -s functions/ffs.mtp configs/c.1/
+        mkdir -p /dev/ffs-mtp
+        mount -t functionfs mtp /dev/ffs-mtp
+        umtprd >/dev/null 2>&1 &
+        echo $! > /run/umtprd.pid
+        # The gadget can only bind once umtprd has written its descriptors (the endpoints appear)
+        i=0
+        while [ ! -e /dev/ffs-mtp/ep1 ] && [ $i -lt 50 ]; do sleep 0.1; i=$((i + 1)); done
+    fi
 
     # Bind the gadget to the USB Device Controller
     ls /sys/class/udc > UDC
     ;;
   stop)
-    echo "Stopping USB Serial Gadget..."
+    echo "Stopping USB Gadget..."
+
+    [ -f /run/umtprd.pid ] && kill "$(cat /run/umtprd.pid)" 2>/dev/null && rm -f /run/umtprd.pid
 
     # With no USB cable the unbind below never returns, which hung every shutdown and reboot
     # (rcK stops here). There is nothing to tear down before the power goes off anyway.
@@ -46,17 +65,19 @@ case "$1" in
     fi
 
     # Unbind from UDC
-    echo "" > /sys/kernel/config/usb_gadget/g1/UDC
+    echo "" > $G/UDC
 
     # Remove symlinks
-    rm -f /sys/kernel/config/usb_gadget/g1/configs/c.1/acm.usb0
+    rm -f $G/configs/c.1/acm.usb0 $G/configs/c.1/ffs.mtp
+    umount /dev/ffs-mtp 2>/dev/null
 
     # Remove directories in reverse order of creation
-    rmdir /sys/kernel/config/usb_gadget/g1/configs/c.1/strings/0x409
-    rmdir /sys/kernel/config/usb_gadget/g1/configs/c.1
-    rmdir /sys/kernel/config/usb_gadget/g1/functions/acm.usb0
-    rmdir /sys/kernel/config/usb_gadget/g1/strings/0x409
-    rmdir /sys/kernel/config/usb_gadget/g1
+    rmdir $G/configs/c.1/strings/0x409
+    rmdir $G/configs/c.1
+    rmdir $G/functions/acm.usb0
+    rmdir $G/functions/ffs.mtp 2>/dev/null
+    rmdir $G/strings/0x409
+    rmdir $G
     ;;
   *)
     echo "Usage: $0 {start|stop}"

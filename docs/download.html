@@ -5,7 +5,6 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>goodluckOS Firmware Builder</title>
 <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.9/dist/cdn.min.js"></script>
-
 <style>
   :root {
     box-sizing: border-box;
@@ -116,24 +115,7 @@
   }
   .row {
       display: flex;
-      gap: 0.625rem;
       align-items: stretch;
-  }
-  a.square {
-      flex: none;
-      width: 3.375rem;
-      margin: 0.5rem 0;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      color: var(--accent);
-      text-decoration: none;
-      background: var(--card);
-      border: 2px dashed var(--border);
-      border-radius: 0.625rem;
-  }
-  a.square:hover {
-      border-color: var(--accent);
   }
 
   /* Buttons and log */
@@ -141,6 +123,7 @@
       display: inline-block;
       background: var(--accent);
       color: #fff;
+      text-decoration: none;
       border: 0;
       border-radius: 0.5rem;
       padding: 0.625rem 1.125rem;
@@ -187,10 +170,10 @@
       margin: 0;
       padding-left: 1rem;
   }
-  .info-panel > a,a:visited {
+  .info-panel > p > a, .info-panel > p > a:visited {
       color: var(--muted);
   }
-  .info-panel > a:hover,a:visited:hover {
+  .info-panel > p > a:hover, .info-panel > p > a:visited:hover {
       color: var(--info);
   }
   .code {
@@ -219,7 +202,7 @@
       display: inline-block;
       text-decoration: none;
   }
-  .disabled { opacity: 50%;}
+  .disabled { opacity: 25%;}
   .subhead {
       transition: color 0.3s ease;
       color: var(--border);
@@ -235,6 +218,13 @@
       border-left-style: solid;
       border-left-width: 0.375rem;
       border-color: var(--info);
+  }
+  .fullwidth {
+      width: 100%;
+      text-align: center;
+  }
+  .svg-icon {
+      margin-top: 0.5rem;
   }
 </style>
 </head>
@@ -280,40 +270,38 @@
     </button>
   </div>
 
-  <div x-show="step1Complete" :class="{'active-step': !step2Complete}" x-data="{helpOpen: false}">
-    <h3>Step 2: Download, Unzip and Load <span x-text="desiredGoodluckBaseImageFileName"></span><span class="subhead" @click="helpOpen = ! helpOpen">help</span></h3>
-    <div class="info-panel" x-show="helpOpen">
-        <p>You can download this file from <a href="https://github.com/CodeZombie/goodluckOS/releases">https://github.com/CodeZombie/goodluckOS/releases</a> or use the Download button below.</p>
-        <p>Be sure you download the correct version for your hardware! A33 builds are NOT compatible with A23 hardware and vice versa.</p>
-        <p>Uncheck "Replace MBR" if you do not want the firmware builder to replace the image's Master Boot Record. This may cause goodluckOS to not boot, and it may make the microSD card unmountable on your computer.</p>
 
+
+  <div :class="{'active-step': !step2Complete && step1Complete, 'disabled': !step1Complete}" x-data="{helpOpen: false}">
+    <h3>Step 2: Prepare Base Image <span class="subhead" @click="helpOpen = ! helpOpen">help</span></h3>
+    <div class="info-panel" x-show="helpOpen">
+        <p>In this step, you'll download the goodluckOS base image zip archive, unzip it, and load the <span x-text="desiredGoodluckBaseImageFileName + '.img'"></span> file back into this tool.</p>
+        <p>You can download this file from <a href="https://github.com/CodeZombie/goodluckOS/releases">https://github.com/CodeZombie/goodluckOS/releases</a> or use the Download button below.</p>
+        <p>Be sure you download the correct version for your hardware. A33 builds are NOT compatible with A23 hardware and vice versa.</p>
     </div>
     <div class="row">
-        <a
-            class="square"
-            :href="latestImageUrl"
-            target="_blank"
-            rel="noopener"
-            title="Download the latest goodluck.img from GitHub releases"
-            aria-label="Download the latest goodluck.img from GitHub releases">
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-            stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M12 3v12"/><path d="M7 11l5 5 5-5"/><path d="M5 20h14"/>
+        <a class="download button fullwidth" :href="latestImageUrl" x-text="'Download ' + desiredGoodluckBaseImageFileName + '.zip'"></a>
+    </div>
+    <div class="fullwidth">
+        <svg class="svg-icon disabled" width="32" viewBox="0 0 32 32" xml:space="preserve">
+        <line style="fill:none;stroke:#fff;stroke-width:2;stroke-miterlimit:10;" x1="16" y1="32" x2="16" y2="0"/>
         </svg>
-        </a>
+    </div>
+    <div class="fullwidth " style="color:#aaa">unzip</div>
+    <div class="fullwidth">
+        <svg class="svg-icon disabled" width="32" viewBox="0 0 32 32" xml:space="preserve">
+        <line style="fill:none;stroke:#fff;stroke-width:2;stroke-miterlimit:10;" x1="16" y1="31" x2="16" y2="0"/>
+        <polyline style="fill:none;stroke:#fff;stroke-width:2;stroke-miterlimit:10;" points="22,23.485 16,30.485 10,23.485 "/>
+        </svg>
+    </div>
+    <div class="row">
         <div x-data="dropzone" data-kind="base" @dragover.prevent="dragOver" @dragleave="dragLeave" @drop.prevent="drop" style="flex:1; min-width:0">
         <label class="drop" :class="cssClass">
-            <b x-text="desiredGoodluckBaseImageFileName"></b>
+            <b x-text="desiredGoodluckBaseImageFileName + '.img'"></b>
             <span x-text="label"></span>
             <input type="file" @change="pick">
         </label>
         </div>
-    </div>
-    <div>
-        <label for="checkbox" class="button secondary">
-            <input type="checkbox" id="checkbox" x-model="replaceMBR" x-on:change="rebuild">
-            Replace MBR
-        </label>
     </div>
     <div class="log" x-show="!step2Logs.isEmpty">
       <template x-for="entry in step2Logs.lines">
@@ -323,11 +311,9 @@
   </div>
 
 
-  <div x-show="step2Complete" :class="{'active-step': !step2Complete}">
+  <div :class="{'active-step': step2Complete, 'disabled': !step2Complete}">
   <h3>Step 3: Download</h3>
-    <template x-if="output">
-      <a class="download button" :href="output.url" :download="output.name" x-text="output.label"></a>
-    </template>
+  <a class="download button" :href="output?.url ?? '#'" :download="output?.name ?? 'none'" x-text="output?.label ?? 'Please complete previous steps'"></a>
   </div>
 </main>
 
@@ -453,9 +439,6 @@ async function sha256Hex(buffer) {
   return Array.from(new Uint8Array(digest), b => b.toString(16).padStart(2, "0")).join("");
 }
 
-/* ==========================================================================
-   Alpine components
-   ========================================================================== */
 document.addEventListener("alpine:init", () => {
 
   /* A single file drop target. Reports the chosen file upward via a "file-chosen" event. */
@@ -498,7 +481,7 @@ document.addEventListener("alpine:init", () => {
     step1Complete: false,
     step2Complete: false,
     output: null,       // { url, name, label } once built
-    replaceMBR: true,
+    downloader: null,
 
     get latestImageUrl() {
       if (!this.variant) {
@@ -509,9 +492,9 @@ document.addEventListener("alpine:init", () => {
 
     get desiredGoodluckBaseImageFileName() {
       if (!this.variant) {
-        return "goodluckOS_base_???.img"
+        return "goodluckOS_base_???"
       }
-      return `goodluckOS_base_${this.variant.soc.toLowerCase()}.img`
+      return `goodluckOS_base_${this.variant.soc.toLowerCase()}`
     },
 
     /* ---- derived state ---- */
@@ -548,6 +531,23 @@ document.addEventListener("alpine:init", () => {
       } catch (error) {
         this.step2Logs.addLine("ERROR: " + error.message, "bad");
       }
+    },
+
+    async onDownloadBaseImageClicked() {
+      if (!this.downloader || !this.downloader.isDownloading) {
+        this.downloader = new ZipDownloader({
+          onChange: (s) => {
+            console.log(
+              `${s.status} | downloading=${s.isDownloading}`,
+              s.progress != null ? `${(s.progress * 100).toFixed(1)}%` : "?%",
+              `${(s.loadedBytes / 1e6).toFixed(2)} MB`,
+              `${(s.speedBytesPerSec / 1e6).toFixed(2)} MB/s`
+            );
+          },
+        });
+        const { name, bytes } = await this.downloader.run(this.latestImageUrl);
+      }
+
     },
 
     /* ---- verification ---- */
@@ -626,14 +626,9 @@ document.addEventListener("alpine:init", () => {
       const { SECTOR, STOCK_END_SECTOR } = CONFIG;
       const stockEnd = STOCK_END_SECTOR * SECTOR;
 
-      let startSector = 0;
-      if (this.replaceMBR) {
-        this.step2Logs.addLine(`[Build] Image will be built with replaced MBR`, "ok");
-        this.step2Logs.addLine(`[NOTE] If your device does not boot, try building an image again with "Replace MBR" disabled.`, "bad");
-        startSector = SECTOR;
-      } else {
-        this.step2Logs.addLine(`[Build] Image will be built WITHOUT "Replace MBR". Your SD Card may not mount on your PC!`, "bad");
-      }
+      let startSector = SECTOR;
+      this.step2Logs.addLine(`[Build] Building image...`, "");
+
 
       // Layout: [goodluck sector 0][stock sectors 1..N-1][goodluck from sector N onward]
       const image = new Blob([
@@ -655,7 +650,7 @@ document.addEventListener("alpine:init", () => {
         label: `Download ${name} (${(image.size / 1048576).toFixed(0)} MiB)`
       };
       this.step3Complete = true;
-      this.step2Logs.addLine("[Build] Image successfully assembled.", "ok");
+      this.step2Logs.addLine("[Build] Image successfully built.", "ok");
     },
 
     rebuild() {

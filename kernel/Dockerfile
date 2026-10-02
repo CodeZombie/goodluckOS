@@ -125,6 +125,10 @@ RUN ./scripts/config --enable CONFIG_ARM_APPENDED_DTB && \
 # Build the vanilla kernel - Docker will cache this long step permanently
 RUN make -j$(nproc) zImage dtbs
 
+# Fixes to upstream drivers
+COPY patches/ /src/patches/
+RUN git apply /src/patches/*.patch
+
 # Panel driver
 COPY drivers/jd9366-ga36mbv1-2.c drivers/gpu/drm/panel/jd9366-ga36mbv1-2.c
 RUN echo 'obj-$(CONFIG_DRM_PANEL_JD9366) += jd9366-ga36mbv1-2.o' >> drivers/gpu/drm/panel/Makefile

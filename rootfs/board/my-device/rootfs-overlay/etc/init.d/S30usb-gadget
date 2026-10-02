@@ -1,6 +1,16 @@
 #!/bin/sh
 
 G=/sys/kernel/config/usb_gadget/g1
+LOG=/tmp/usb-gadget.log
+
+# Rebuild the gadget with the serial console alone (MTP did not work)
+serial_only() {
+    echo "$1: serial only" >> $LOG
+    [ -f /run/umtprd.pid ] && kill "$(cat /run/umtprd.pid)" 2>/dev/null && rm -f /run/umtprd.pid
+    echo "" > $G/UDC 2>/dev/null
+    rm -f $G/configs/c.1/ffs.mtp
+    ls /sys/class/udc > $G/UDC
+}
 
 case "$1" in
   start)
@@ -43,15 +53,30 @@ case "$1" in
         ln -s functions/ffs.mtp configs/c.1/
         mkdir -p /dev/ffs-mtp
         mount -t functionfs mtp /dev/ffs-mtp
-        umtprd >/dev/null 2>&1 &
+        umtprd >/tmp/umtprd.log 2>&1 &
         echo $! > /run/umtprd.pid
         # The gadget can only bind once umtprd has written its descriptors (the endpoints appear)
         i=0
         while [ ! -e /dev/ffs-mtp/ep1 ] && [ $i -lt 50 ]; do sleep 0.1; i=$((i + 1)); done
     fi
 
-    # Bind the gadget to the USB Device Controller
-    ls /sys/class/udc > UDC
+    # Bind the gadget to the USB Device Controller. If MTP keeps it from binding, drop MTP
+    # and bind the serial console alone: losing the console is much worse than losing MTP.
+    UDC_NAME=$(ls /sys/class/udc)
+    if ! echo "$UDC_NAME" > UDC 2>>$LOG; then
+        serial_only "bind failed"
+    elif [ -L configs/c.1/ffs.mtp ]; then
+        # The bind can succeed and the PC still not enumerate the device. With a cable in,
+        # a working gadget reaches "configured" in a second or two; give it 15s.
+        (
+            sleep 15
+            state=$(cat /sys/class/udc/$UDC_NAME/state)
+            echo "state after 15s: $state" >> $LOG
+            if [ "$(cat /sys/class/power_supply/axp20x-usb/online 2>/dev/null)" = "1" ] && [ "$state" != "configured" ]; then
+                serial_only "not enumerated"
+            fi
+        ) &
+    fi
     ;;
   stop)
     echo "Stopping USB Gadget..."
@@ -64,8 +89,14 @@ case "$1" in
         exit 0
     fi
 
-    # Unbind from UDC
-    echo "" > $G/UDC
+    # Unbind from UDC. This can also hang with the cable in (e.g. a half-started MTP function),
+    # so give it 3s and let the shutdown go on without the teardown.
+    ( echo "" > $G/UDC ) &
+    i=0
+    while kill -0 $! 2>/dev/null; do
+        [ $i -ge 30 ] && exit 0
+        sleep 0.1; i=$((i + 1))
+    done
 
     # Remove symlinks
     rm -f $G/configs/c.1/acm.usb0 $G/configs/c.1/ffs.mtp

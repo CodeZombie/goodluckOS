@@ -77,6 +77,8 @@ RUN ./scripts/config --enable CONFIG_ARM_APPENDED_DTB && \
     ./scripts/config --enable CONFIG_USB_CONFIGFS && \
     ./scripts/config --enable CONFIG_USB_CONFIGFS_SERIAL && \
     ./scripts/config --enable CONFIG_USB_CONFIGFS_ACM && \
+    ./scripts/config --enable CONFIG_USB_CONFIGFS_F_FS && \
+    ./scripts/config --enable CONFIG_POSIX_MQUEUE && \
     ./scripts/config --enable CONFIG_INPUT_KEYBOARD && \
     ./scripts/config --enable CONFIG_KEYBOARD_GPIO && \
     ./scripts/config --enable CONFIG_KEYBOARD_GPIO_POLLED && \
@@ -122,6 +124,10 @@ RUN ./scripts/config --enable CONFIG_ARM_APPENDED_DTB && \
 
 # Build the vanilla kernel - Docker will cache this long step permanently
 RUN make -j$(nproc) zImage dtbs
+
+# Fixes to upstream drivers
+COPY patches/ /src/patches/
+RUN git apply /src/patches/*.patch
 
 # Panel driver
 COPY drivers/jd9366-ga36mbv1-2.c drivers/gpu/drm/panel/jd9366-ga36mbv1-2.c

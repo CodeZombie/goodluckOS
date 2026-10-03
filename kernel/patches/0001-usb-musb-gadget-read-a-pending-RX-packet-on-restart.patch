@@ -1,0 +1,39 @@
+From: alvesmaicon <alvesmaiconn@gmail.com>
+Subject: [PATCH] usb: musb: gadget: read a pending RX packet instead of flushing it
+
+When an OUT request is queued on an idle endpoint, musb_ep_restart()
+flushed the RX FIFO. A packet that arrived while no request was queued
+was thrown away. FunctionFS queues one request per read(), so with MTP
+(umtprd) the data phase that follows a command right away was lost and
+the host hung waiting (SendObjectInfo / SendObject never completed).
+
+Read the pending packet with rxstate(), as for TX with txstate().
+
+diff --git a/drivers/usb/musb/musb_gadget.c b/drivers/usb/musb/musb_gadget.c
+index 016d3f3fc..c204c8c4c 100644
+--- a/drivers/usb/musb/musb_gadget.c
++++ b/drivers/usb/musb/musb_gadget.c
+@@ -1162,18 +1162,16 @@ void musb_free_request(struct usb_ep *ep, struct usb_request *req)
+  */
+ void musb_ep_restart(struct musb *musb, struct musb_request *req)
+ {
+-	u16 csr;
+-	void __iomem *epio = req->ep->hw_ep->regs;
+-
+ 	trace_musb_req_start(req);
+ 	musb_ep_select(musb->mregs, req->epnum);
+ 	if (req->tx) {
+ 		txstate(musb, req);
+ 	} else {
+-		csr = musb_readw(epio, MUSB_RXCSR);
+-		csr |= MUSB_RXCSR_FLUSHFIFO | MUSB_RXCSR_P_WZC_BITS;
+-		musb_writew(epio, MUSB_RXCSR, csr);
+-		musb_writew(epio, MUSB_RXCSR, csr);
++		/* A packet may already be waiting in the FIFO: it arrived while no
++		 * request was queued (FunctionFS queues one per read()). Read it
++		 * instead of flushing it, or that OUT packet is lost.
++		 */
++		rxstate(musb, req);
+ 	}
+ }
+ 

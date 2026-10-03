@@ -34,6 +34,12 @@ COMMAND=retroarch
 ICON=/usr/share/icons/retroarch.png
 
 [ENTRY]
+CATEGORY=Emulators/Frontends
+NAME=Vitrine
+DESCRIPTION=An alternative game launcher with box art, favorites and search
+COMMAND=vitrine
+
+[ENTRY]
 CATEGORY=Games
 NAME=Chocolate Doom
 DESCRIPTION=It's Doom.

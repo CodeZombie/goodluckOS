@@ -123,9 +123,20 @@ if mountpoint -q "$MOUNT_POINT"; then
         exit 1
     fi
 
-    BACKUP_NEEDED_KB=$((HOME_USED_KB + HOME_USED_KB / 10 + 1024))
+    # Upper bound for the tar archive: the data never exceeds the allocated space (FAT clusters
+    # are multiples of tar's 512-byte blocks), and every entry adds a 512-byte header plus, for
+    # paths over 100 characters, a long-name header and the name itself. 2 KB per entry covers
+    # paths up to ~1 KB; then the end-of-archive blocks and a 1 MB margin.
+    HOME_ENTRIES=$(find "$MOUNT_POINT" 2>/dev/null | wc -l)
+    if ! is_number "$HOME_ENTRIES"; then
+        log "ERROR: could not count the files in HOME - aborting before touching anything"
+        FAIL_REASON="Could not check space for the HOME backup."
+        exit 1
+    fi
+    BACKUP_NEEDED_KB=$((HOME_USED_KB + HOME_ENTRIES * 2 + 10 + 1024))
+    log "HOME entries: ${HOME_ENTRIES}, backup needs at most ${BACKUP_NEEDED_KB}KB"
     if [ "$BACKUP_NEEDED_KB" -gt "$BACKUP_FREE_KB" ]; then
-        log "ERROR: backup needs ~${BACKUP_NEEDED_KB}KB but only ${BACKUP_FREE_KB}KB is free at $BACKUP_DIR - aborting before touching anything"
+        log "ERROR: backup needs up to ${BACKUP_NEEDED_KB}KB but only ${BACKUP_FREE_KB}KB is free at $BACKUP_DIR - aborting before touching anything"
         FAIL_REASON="HOME is too big to back up before resizing."
         exit 1
     fi

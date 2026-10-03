@@ -4,7 +4,10 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>goodluckOS Firmware Builder</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css">
 <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.9/dist/cdn.min.js"></script>
+
 <style>
   :root {
     box-sizing: border-box;
@@ -59,12 +62,14 @@
       margin: 0;
       background: var(--bg);
       color: var(--fg);
-      font: 1rem/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+      font-family: "Inter", sans-serif;
+      font-optical-sizing: auto;
   }
   main {
       max-width: 45rem;
       margin: 0 auto;
       padding: 1.25rem 1rem 3.75rem;
+      padding-top: 0;
   }
   h1 {
       font-size: 2rem;
@@ -77,9 +82,36 @@
       letter-spacing: .05em;
       color: var(--muted);
   }
+  .thick {
+      font-weight: 800;
+  }
+  .italic {
+      font-style: italic;
+  }
+  .red {
+      color: red;
+  }
   .subtitle {
       color: var(--muted);
       margin: 0 0 0.5rem;
+  }
+  .small-text {
+      font-size: 80%;
+  }
+  .smaller-text {
+      font-size: 60%;
+  }
+  .large-text {
+      font-size: 110%;
+  }
+  .larger-text {
+      font-size: 140%;
+  }
+  .v-center {
+      vertical-align: center;
+  }
+  .center-text {
+      text-align: center;
   }
 
   /* Drop zones */
@@ -152,9 +184,39 @@
       font: 0.78125rem/1.5 ui-monospace, Menlo, monospace;
       word-break: break-all;
   }
+
+  .help-panel {
+    background: var(--bg);
+    box-shadow: 0 0px 0px 0 rgba(0, 0, 0, 0.2), 0 6px 12px 0 rgba(0, 0, 0, 0.19);
+    border-radius: 6px;
+    padding: 0.25rem;
+    margin-right: 0;
+    margin-top:1rem;
+    margin-bottom: 1rem;
+  }
+  .help-panel > header {
+    font-size: 0.9rem;
+    font-weight: 800;
+    padding:0.4rem;
+    padding-left: 0.5rem;
+    color: var(--fg);
+  }
+  .help-panel > article {
+      padding: 0.625rem;
+      color: var(--fg);
+  }
+  .help-panel > article > a, .help-panel > article > a:visited{
+      text-decoration: none;
+      color: var(--accent);
+  }
+  .help-panel > article > a:hover{
+      text-decoration: none;
+      color: var(--fg);
+  }
+
   .info-panel {
       padding: 0.625rem;
-      background: #141414;
+      background: var(--bg);
       border: 1px solid var(--info);
       border-radius: 0.125rem;
       margin-bottom: 1rem;
@@ -231,14 +293,22 @@
 
 <body>
 <main x-data="builder" x-cloak @file-chosen="onFile">
-  <h1>goodluckOS Firmware Builder</h1>
-  <p class="subtitle">Identify your hardware and build your own bootable goodluckOS firmware image.</p>
+  <h1><span class="thick italic">goodluck<span class="red large-text">OS</span></span></h1>
+  <p class="subtitle">Firmware Builder / Hardware Identifier</p>
+  <div class="help-panel">
+      <header>Video Guides</header>
+      <article>
+          Check out the <a href="https://www.youtube.com/watch?v=bkud4CBHvI8"><i class="bi bi-youtube"></i> Window Video Guide</a>, or the <a href="https://www.youtube.com/watch?v=3RUR5a7hDDs"> <i class="bi bi-youtube"></i> Linux Video Guide</a>
+
+      </article>
+  </div>
+  <br/>
   <div x-data="{helpOpen: false}" :class="{'active-step': !step1Complete}">
     <h3>Step 1: Load your SD Card Image <span class="subhead" @click="helpOpen = ! helpOpen">help</span></h3>
     <div class="info-panel" x-show="helpOpen">
         <p>For this step, you'll need an image of the stock microSD card that came with your GA36-MB. You only need the first 128mb, but if the image is larger that's fine.</p>
         <h4>Windows Guide</h4>
-        <p>Plug the microSD card into your PC with an adapter and create an image with <a href="https://sourceforge.net/projects/win32diskimager/">win32diskimager</a></p>
+        <p>Plug the microSD card into your PC with an adapter and create an image with <a href="https://hddguru.com/software/HDD-Raw-Copy-Tool/HDDRawCopy1.20Portable.exe">HDD Raw Copy Tool v1.20</a></p>
         <h4>Linux Guide</h4>
         <ol>
             <li>Plug your microSD card into your computer</li>

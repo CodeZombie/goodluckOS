@@ -1,0 +1,12 @@
+config BR2_PACKAGE_VITRINE
+	bool "vitrine"
+	depends on BR2_INSTALL_LIBSTDCPP # C++ is required
+	select BR2_PACKAGE_SDL2
+	select BR2_PACKAGE_SDL2_IMAGE
+	select BR2_PACKAGE_SDL2_TTF
+	help
+	  Vitrine, an optional alternative game launcher.
+	  It reads the same apps.puppy files as Puppy.
+
+comment "vitrine needs a toolchain w/ C++"
+	depends on !BR2_INSTALL_LIBSTDCPP

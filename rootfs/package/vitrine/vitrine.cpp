@@ -283,6 +283,7 @@ struct System {
 
 struct App {
     std::string name, command;
+    std::string key;  // CATEGORY and NAME from apps.puppy, as Puppy tells two entries apart
 };
 
 struct SystemStyle {
@@ -400,9 +401,11 @@ static void parseAppsFile(const std::string& devicePath,
             std::string name = get("NAME");
             if (!kReplacedEntries.count(name)) {
                 auto it = kAppNames.find(name);
-                App app{it != kAppNames.end() ? L(it->second.first, it->second.second) : name, get("COMMAND")};
+                std::string category = get("CATEGORY").empty() ? "Applications" : get("CATEGORY");
+                App app{it != kAppNames.end() ? L(it->second.first, it->second.second) : name, get("COMMAND"),
+                        category + "\x1f" + name};
                 auto same = std::find_if(apps.begin(), apps.end(),
-                                         [&](const App& x) { return x.name == app.name; });
+                                         [&](const App& x) { return x.key == app.key; });
                 if (same != apps.end()) *same = app;
                 else apps.push_back(app);
             }
@@ -524,16 +527,21 @@ static void scanSystem(System& sys) {
     }
     std::set<std::string> seen;
     for (const auto& dir : sys.dirs) {
-        DIR* d = opendir(hostPath(dir).c_str());
+        std::string hostDir = hostPath(dir);
+        DIR* d = opendir(hostDir.c_str());
         if (!d) continue;
         while (dirent* de = readdir(d)) {
             if (de->d_name[0] == '.') continue;
-            if (de->d_type != DT_REG && de->d_type != DT_UNKNOWN) continue;
+            if (de->d_type != DT_REG && de->d_type != DT_LNK && de->d_type != DT_UNKNOWN) continue;
             std::string name = de->d_name;
             size_t dot = name.rfind('.');
             if (dot == std::string::npos) continue;
             std::string ext = lower(name.substr(dot + 1));
             if (!exts.empty() && std::find(exts.begin(), exts.end(), ext) == exts.end()) continue;
+            if (de->d_type != DT_REG) {  // a symlink or an unknown type: follow it, as Puppy does
+                struct stat st;
+                if (stat((hostDir + "/" + name).c_str(), &st) != 0 || !S_ISREG(st.st_mode)) continue;
+            }
             Game g;
             g.path = dir + "/" + name;
             if (!seen.insert(g.path).second) continue;
@@ -792,9 +800,13 @@ struct Catalog {
         return false;
     }
 
-    // The catalog only writes a file for games with infinite lives or other cheats, so the file
-    // existing is enough: no reading while the list scrolls.
-    bool hasCheats(Game& g) { return !cheatsFileFor(g).empty(); }
+    // The panel lists infinite lives and other cheats: a catalog with only master codes, or none
+    // that can be read, has nothing to switch. Read once per catalog file, then cached.
+    bool hasCheats(Game& g) {
+        if (cheatsFileFor(g).empty()) return false;
+        for (const auto& e : cheatsFor(g)) if (e.kind == 'L' || e.kind == 'C') return true;
+        return false;
+    }
 
     std::unordered_map<std::string, std::vector<CheatEntry>> cheatCache;
 
@@ -2093,6 +2105,7 @@ public:
         cheatRows.clear();
         for (const auto& e : catalog.cheatsFor(*g)) if (e.kind == 'L') cheatRows.push_back(e);
         for (const auto& e : catalog.cheatsFor(*g)) if (e.kind == 'C') cheatRows.push_back(e);
+        if (cheatRows.empty()) return;
         for (auto& e : cheatRows) {
             // The number added to a repeated description stays after the translated text.
             size_t cut = e.desc.size();
@@ -2486,6 +2499,7 @@ public:
 
     void cheatsKey(Key k) {
         int n = (int)cheatRows.size();
+        if (n == 0 && k != Key::B && k != Key::Select) return;
         switch (k) {
             case Key::Up: cheatsCursor = (cheatsCursor + n - 1) % n; break;
             case Key::Down: cheatsCursor = (cheatsCursor + 1) % n; break;
@@ -3679,8 +3693,9 @@ public:
     }
 
     void updateBattery() {
+        bool wasPlugged = plugged;
         int b = readBattery(&plugged);
-        if (b != battery) dirty = true;
+        if (b != battery || plugged != wasPlugged) dirty = true;
         battery = b;
         long now = monotonicSeconds();
         if (plugged || b < 0 || (!drain.empty() && b > drain.back().second)) drain.clear();

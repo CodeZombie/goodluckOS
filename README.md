@@ -125,6 +125,20 @@ GoodluckOS uses a novel four-step containerized build system featuring Buildroot
 
 Take a look at [BUILD.MD](BUILD.md) for instructions and guidelines.
 
+## Design Philosophy
+goodluckOS has been designed with a few core principles:
+- The core OS will ship with at most one tool for any job. Duplicate functionality is duplicate bugs.
+- goodluckOS should strive to be as battery-efficient as possible. If a not-strictly-necessary pretty UI feature uses more resources than an uglier alternative, the uglier alternative will be preferred.
+- Do not reinvent the wheel. Opt to use existing packages instead of writing them from scratch so long as they don't conflict with the previous principles.
+- Anything not usable by most people should be distributed as an installable package instead of being baked into the core OS.
+
+Please keep those in mind if you intend for your work to be merged upstream :)
+
+I am currently in the process of choosing a package-management solution for goodluckOS, so if your application/feature is not approved for merging upstream, please feel free to package it up as an installable application and I will be happy to advertise it as an optional feature for goodluckOS users.
+
+## AI Contribution Policy
+Contributors should feel free to use any tool at their disposal to write their code. Good code is good code regardless who (or what) wrote it. However, large systems that have not been properly tested, documented, or are not understood by the human contributors will _not_ be accepted until all of these conditions are met. This rule applies to both human written code and LLM-generated code.
+
 ## LICENSE
 This project is licensed under the GNU GENERAL PUBLIC LICENSE VERSION 2.0 see the [LICENSE](LICENSE) file for details.
 

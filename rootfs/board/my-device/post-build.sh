@@ -41,5 +41,3 @@ mkdir ${TARGET_DIR}/etc/player-flags
 #     echo "post-build.sh: WARNING: ${INITTAB} not found, skipping puppy-bootstrap shutdown line injection"
 # fi
 
-
-echo "::respawn:/usr/local/bin/power-manager.sh" >> "$INITTAB"

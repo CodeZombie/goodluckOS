@@ -529,7 +529,7 @@ static void launch(const Model& m, const Entry& e) {
     if (state) state << e.category << "\n" << e.name << "\n";
 
     std::ostringstream commandStream;
-    commandStream << "doas /etc/init.d/S99appd launch-application " << shellQuote(e.command);
+    commandStream << "doas appctl launch-application " << shellQuote(e.command);
     if (e.terminal) {
         commandStream << " 1";
     }

@@ -115,6 +115,8 @@
 		"Speaker", "Speaker",
 		"Headphone", "Headphone Jack";
 
+	simple-audio-card,pin-switches = "Speaker";	/* no jack detection */
+
 	simple-audio-card,routing =
         "Left DAC", "DACL",
 		"Right DAC", "DACR",
@@ -122,7 +124,8 @@
 		"Speaker Amp INR", "HP",
 		"Speaker", "Speaker Amp OUTL",
 		"Speaker", "Speaker Amp OUTR",
-		"Headphone Jack", "HP";
+		"Headphone Jack", "HP",
+		"Headphone Jack", "HPCOM";	/* direct drive: the jack's return is HPCOM */
 };
 
 &dai {

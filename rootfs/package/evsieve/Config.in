@@ -1,0 +1,11 @@
+config BR2_PACKAGE_EVSIEVE
+	bool "evsieve"
+	depends on BR2_PACKAGE_HOST_RUSTC_TARGET_ARCH_SUPPORTS
+	select BR2_PACKAGE_HOST_RUSTC
+	select BR2_PACKAGE_LIBEVDEV
+	help
+	  Evsieve is a low-level utility that can read events from
+	  Linux event devices (evdev), remap, filter and merge them,
+	  and write them to virtual input devices.
+
+	  https://github.com/KarsMulder/evsieve

@@ -120,6 +120,9 @@ RUN ./scripts/config --enable CONFIG_ARM_APPENDED_DTB && \
     ./scripts/config --enable CONFIG_SQUASHFS_XZ && \
     ./scripts/config --enable CONFIG_SQUASHFS_ZSTD && \
     ./scripts/config --enable CONFIG_OVERLAY_FS && \
+    ./scripts/config --enable CONFIG_INPUT_MISC && \
+    ./scripts/config --enable CONFIG_INPUT_UINPUT && \
+    ./scripts/config --enable CONFIG_CGROUPS && \
     make olddefconfig
 
 # Build the vanilla kernel - Docker will cache this long step permanently

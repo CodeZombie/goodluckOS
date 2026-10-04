@@ -41,5 +41,5 @@ If you want to test changes to the kernel without rebuilding/reflashing the enti
 1. Run `./build.sh` to build the kernel image.
 2. Plug your goodluckOS microSD card into your linux computer
 3. Run `lsblk` to identify the sd card device (not a partition)
-4. Flash `out/android_boot.img` with `sudo dd if=out/android_boot.img bs=512 seek=172032 conv=notrunc status=progress of=/dev/sdX` where `sdX` is your microSD card device.
+4. Flash `out/android_boot.img` with `sudo dd if=out/android_boot_a33.img bs=512 seek=172032 conv=notrunc status=progress of=/dev/sdX` where `sdX` is your microSD card device, and `a33` is `a23` if that's the SoC your unit has.
 5. Run `sync` to make sure the bits are fully written to the microSD card.

@@ -98,5 +98,5 @@ EOF
 # EOF
 
 FROM scratch AS export
-COPY --from=builder /workspace/goodluck_a33.img /
-COPY --from=builder /workspace/goodluck_a23.img /
+COPY --from=builder /workspace/goodluck_a33.img /goodluck_base_a33.img
+COPY --from=builder /workspace/goodluck_a23.img /goodluck_base_a23.img

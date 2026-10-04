@@ -2,14 +2,14 @@
 CATEGORY=System
 NAME=Reboot
 DESCRIPTION=Reboot the device
-COMMAND=are-you-sure "Are you sure you want to reboot the device?" "echo reboot > /run/power-request"
+COMMAND=are-you-sure "Are you sure you want to reboot the device?" "doas /sbin/reboot"
 ICON=/usr/share/icons/reboot.png
 
 [ENTRY]
 CATEGORY=System
 NAME=Power Off
 DESCRIPTION=Power off the device
-COMMAND=are-you-sure "Are you sure you want to power off the device?" "echo poweroff > /run/power-request"
+COMMAND=are-you-sure "Are you sure you want to power off the device?" "doas /sbin/poweroff"
 ICON=/usr/share/icons/poweroff.png
 
 [ENTRY]
@@ -21,7 +21,7 @@ ICON=/usr/share/icons/system-settings.png
 
 [ENTRY]
 CATEGORY=System
-NAME=Rezize Home
+NAME=Resize Home
 DESCRIPTION=Resize your HOME partition
 COMMAND=resize-home
 ICON=/usr/share/icons/resize-home.png

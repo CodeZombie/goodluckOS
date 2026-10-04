@@ -4,10 +4,12 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cstdlib>
 #include <cmath>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <sstream>
 #include <map>
 #include <memory>
 #include <string>
@@ -18,7 +20,7 @@ namespace fs = std::filesystem;
 static const char* kFontFile      = "/usr/share/fonts/Inter_24pt-Medium.ttf";
 static const char* kAppsFiles[]   = {"/usr/share/puppy/apps.puppy", "/home/player/apps.puppy"};
 static const char* kPuppyFiles[]   = {"/home/player/.local/share/applications"};
-static const char* kLaunchFile    = "/dev/shm/launch";
+//static const char* kLaunchFile    = "/dev/shm/launch";
 static const char* kStateFile     = "/dev/shm/launcher_state";
 static const char* kAutoStartFile = "/home/player/autolaunch";
 
@@ -216,6 +218,7 @@ struct Entry {
     std::string category;
     std::string name;
     std::string description;
+    bool terminal;
     std::string command;
     std::string iconPath;
 
@@ -345,6 +348,7 @@ static void parseAppsFile(const std::string& path, std::vector<Record>& records)
             rec.entry.category    = get("CATEGORY").empty() ? "Applications" : get("CATEGORY");
             rec.entry.name        = get("NAME");
             rec.entry.description = get("DESCRIPTION");
+            rec.entry.terminal    = !get("TERMINAL").empty();
             rec.entry.command     = get("COMMAND");
             rec.entry.iconPath    = get("ICON");
             if (!rec.entry.name.empty() && !rec.entry.command.empty()) upsert(records, rec);
@@ -436,6 +440,7 @@ static std::vector<Entry> expandArchive(const Archive& a) {
             e.name        = p.stem().string();
             e.description = a.description;
             e.command     = buildArchiveCommand(a.command, p.string());
+            e.terminal    = false;
             e.iconPath    = findArchiveIcon(a, e.name);
             out.push_back(std::move(e));
         }
@@ -519,10 +524,19 @@ static void toggleAutoStart(Model& m) {
 }
 
 static void launch(const Model& m, const Entry& e) {
-    { std::ofstream out(kLaunchFile); if (out) out << e.command << "\n"; }
+    // Save cursor position to file
     std::ofstream state(kStateFile);
     if (state) state << e.category << "\n" << e.name << "\n";
-    (void)m;
+
+    std::ostringstream commandStream;
+    commandStream << "doas /etc/init.d/S99appd launch-application " << shellQuote(e.command);
+    if (e.terminal) {
+        commandStream << " 1";
+    }
+    commandStream << "\n";
+
+    int exitCode = std::system(commandStream.str().c_str());
+    (void)exitCode;
 }
 
 static void restoreCursor(Model& m) {
@@ -758,7 +772,7 @@ int main() {
                 case Action::Launch:
                     if (const Entry* e = model.selected()) {
                         launch(model, *e);
-                        running = false;
+                        //running = false;
                     }
                     break;
                 case Action::None: break;

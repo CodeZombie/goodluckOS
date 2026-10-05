@@ -24,6 +24,7 @@ Please Note: At the time of writing, Allwinner-A23 based GA36-MB devices (which 
 - FN+Vol buttons adjust the screen brightness from anywhere
 - FN+START+SELECT kills the active application, bringing you right back to the launcher
 - FN+DPAD_UP toggles a live FPS/CPU graph for monitoring in-game performance.
+- Headphones work. FN+DPAD_DOWN switches the sound between the speaker and the headphones, since the GA36-MB v1.1 can't detect the jack (the speaker comes back on at boot)
 - If the screen is on, the LEDs are off. Nothing blinding you while you're playing in the dark
 - Comes stock with Chocolate Doom, ready to play
 - Comes stock with Retroarch and several optimized cores (PCSX-ReArmed, Snes9x, QuickNES, DOSbox, Genesis Plus GX, mGBA, etc)

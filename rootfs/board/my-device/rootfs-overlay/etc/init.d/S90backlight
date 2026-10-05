@@ -1,9 +1,24 @@
 #!/bin/sh
 # Allow the video group to adjust screen brightness
+# restores brightness on startup.
+STATE_DIR=/var/lib/display
+STATE_FILE=$STATE_DIR/brightness
+BL=/sys/class/backlight/backlight/brightness
 
 case "$1" in
   start)
     chgrp video /sys/class/backlight/backlight/brightness
     chmod 664 /sys/class/backlight/backlight/brightness
+
+    mkdir -p "$STATE_DIR"
+    if [ -r "$STATE_FILE" ]; then
+        cat "$STATE_FILE" > "$BL"
+    else
+        echo 5 > "$BL"
+    fi
+    ;;
+  stop)
+      mkdir -p "$STATE_DIR"
+      cat "$BL" > "$STATE_FILE.tmp" && mv "$STATE_FILE.tmp" "$STATE_FILE"
     ;;
 esac

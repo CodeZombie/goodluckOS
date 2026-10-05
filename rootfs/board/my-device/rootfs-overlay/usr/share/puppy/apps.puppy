@@ -27,6 +27,34 @@ COMMAND=resize-home
 ICON=/usr/share/icons/resize-home.png
 
 [ENTRY]
+CATEGORY=Terminal
+NAME=Last App Log
+DESCRIPTION=View the console logs of the last app
+TERMINAL=1
+COMMAND=doas evsieve --input /dev/input/event2 grab --map btn:dpad_up key:up --map btn:dpad_down key:down --output repeat=enable & less /dev/shm/application/application.log
+
+[ENTRY]
+CATEGORY=Terminal
+NAME=Process Viewer
+DESCRIPTION=View the running processes with Top
+TERMINAL=1
+COMMAND=doas evsieve --input /dev/input/event2 grab --map btn:dpad_up key:up --map btn:dpad_down key:down --map btn:dpad_left key:pageup --map btn:dpad_right key:pagedown --map btn:south key:q --output repeat=enable & top
+
+[ENTRY]
+CATEGORY=Terminal
+NAME=AlsaMixer
+DESCRIPTION=View and Modify your sound settings
+TERMINAL=1
+COMMAND=doas evsieve --input /dev/input/event2 grab --map btn:dpad_up key:up --map btn:dpad_down key:down --map btn:dpad_right key:right --map btn:dpad_left key:left --map btn:south key:esc --output repeat=enable & alsamixer
+
+[ENTRY]
+CATEGORY=Terminal
+NAME=Dmesg
+DESCRIPTION=View kernel logs
+TERMINAL=1
+COMMAND=doas evsieve --input /dev/input/event2 grab --map btn:dpad_up key:up --map btn:dpad_down key:down --map btn:dpad_left key:pageup --map btn:dpad_right key:pagedown --map btn:south key:q --output repeat=enable & sed -E 's/^.{16}//' /var/log/messages | less -m
+
+[ENTRY]
 CATEGORY=Emulators/Frontends
 NAME=RetroArch
 Description=A frontend for emulators, game engines and media players

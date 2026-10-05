@@ -1,2 +1,9 @@
 #!/bin/sh
-alsactl restore -f /var/lib/alsa/asound.state
+#
+case "$1" in
+  start)
+      alsactl restore -f /var/lib/alsa/asound.state
+  ;;
+  stop)
+      alsactl --file /var/lib/alsa/asound.state store
+esac

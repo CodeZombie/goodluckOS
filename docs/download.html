@@ -254,6 +254,13 @@
   .bad {
       color: var(--bad);
   }
+
+  .button.bad, button.bad {
+      padding: 0.5rem 0.875rem;
+      font-size: 0.875rem;
+      background: var(--card);
+      border: 1px solid var(--bad);
+  }
   .override {
       display: block;
       margin-top: 0.625rem;
@@ -338,9 +345,11 @@
     <button class="secondary" x-show="hasScriptBin" @click="downloadScriptBin">
         Download your script.bin
     </button>
+
+    <button class="bad" x-show="variant && !variant.supported" @click="proceedWithUnsupportedVariant">
+        Proceed Anyway <strong>(THIS MAY DAMAGE YOUR HARDWARE)</strong>
+    </button>
   </div>
-
-
 
   <div :class="{'active-step': !step2Complete && step1Complete, 'disabled': !step1Complete}" x-data="{helpOpen: false}">
     <h3>Step 2: Prepare Base Image <span class="subhead" @click="helpOpen = ! helpOpen">help</span></h3>
@@ -552,6 +561,7 @@ document.addEventListener("alpine:init", () => {
     step2Complete: false,
     output: null,       // { url, name, label } once built
     downloader: null,
+    allowUnsupportedVariant: false,
 
     get latestImageUrl() {
       if (!this.variant) {
@@ -578,6 +588,8 @@ document.addEventListener("alpine:init", () => {
       const { kind, file } = event.detail;
       if (kind === "stock") this.stockFile = file;
       if (kind === "base") this.baseFile = file;
+
+      if (kind === "base" && !this.step1Complete) { return; }
 
       // Re-run all checks from scratch so the log always reflects current files.
       this.step1Logs.clear();
@@ -648,12 +660,15 @@ document.addEventListener("alpine:init", () => {
 
       const match = CONFIG.KNOWN_HASHES[hash];
       if (match) {
+        this.variant = match;
         if (match.supported) {
-          this.variant = match;
           this.step1Complete = true;
           this.step1Logs.addLine("Approved variant: " + match.name, "ok");
           this.step1Logs.addLine("Variant SoC: " + match.soc, "ok");
         } else {
+          if (this.allowUnsupportedVariant) {
+            this.step1Complete = true;
+          }
           this.step1Logs.addLine("Unsupported variant: " + match.name, "bad");
           this.step1Logs.addLine("Variant SoC: " + match.soc, "bad");
           this.step1Logs.addLine("Your device is recognized, but not yet supported by goodluckOS.", "bad");
@@ -690,6 +705,11 @@ document.addEventListener("alpine:init", () => {
     /* ---- actions ---- */
     downloadScriptBin() {
       this.saveBlob(this.scriptBlob, "script.bin");
+    },
+
+    proceedWithUnsupportedVariant() {
+      this.allowUnsupportedVariant = true;
+      this.onFile({detail: {kind: "stock", file: this.stockFile}});
     },
 
     build() {

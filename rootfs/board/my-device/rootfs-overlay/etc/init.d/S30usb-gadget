@@ -58,6 +58,8 @@ case "$1" in
         # The gadget can only bind once umtprd has written its descriptors (the endpoints appear)
         i=0
         while [ ! -e /dev/ffs-mtp/ep1 ] && [ $i -lt 50 ]; do sleep 0.1; i=$((i + 1)); done
+        # a TF-2 card mounted before umtprd started
+        /usr/local/bin/external-card.sh mtp
     fi
 
     # Bind the gadget to the USB Device Controller. If MTP keeps it from binding, drop MTP

@@ -94,6 +94,11 @@ If the console was connected to a charger when it booted (no PC), restart it bef
 
 To add custom art to Puppy, add an image file into the `icons` folder in your rom folder with the same name as the rom file. (eg. if your game is `roms/snes/super-mario.smc`, your image would be `roms/snes/icons/super-mario.png`)
 
+### Second card (TF-2 slot)
+A FAT32 card in the second slot is found when the console starts, and its games show up in each system's tab. Put them in a `roms` folder with the same system folders as HOME (`roms/snes`, `roms/psx`, `roms/gba`...), and covers in each folder's `icons`. A card with no `roms` folder gets the folders created the first time it's mounted; existing folders and files are never touched.
+
+Puppy finds games by folder, not by file type: games loose on the card, or in the wrong system's folder, won't show up or won't start. exFAT cards (most cards over 32 GB come that way) aren't read yet, so format the card as FAT32.
+
 ### Can I add my own archives?
 You sure can!
 

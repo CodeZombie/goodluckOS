@@ -328,6 +328,7 @@
     non-removable;
     pinctrl-names = "default";
     pinctrl-0 = <&mmc1_pg_pins>;
+    vmmc-supply = <&reg_dcdc1>;
     status = "okay";
 };
 

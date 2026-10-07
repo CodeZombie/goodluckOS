@@ -101,6 +101,7 @@ RUN ./scripts/config --enable CONFIG_ARM_APPENDED_DTB && \
     ./scripts/config --enable CONFIG_SND_SOC && \
     ./scripts/config --enable CONFIG_SND_SIMPLE_CARD && \
     ./scripts/config --enable CONFIG_SND_SOC_SIMPLE_AMPLIFIER && \
+    ./scripts/config --enable CONFIG_SND_SUN4I_CODEC && \
     ./scripts/config --enable CONFIG_SND_SUN8I_CODEC_ANALOG && \
     ./scripts/config --enable CONFIG_KEYBOARD_SUN4I_LRADC && \
     ./scripts/config --enable CONFIG_REGULATOR_FIXED_VOLTAGE && \
@@ -187,4 +188,6 @@ RUN mkbootimg \
 FROM scratch AS artifacts
 COPY --from=kernel_builder /src/android_boot_a33.img ./android_boot_a33.img
 COPY --from=kernel_builder /src/android_boot_a23.img ./android_boot_a23.img
+COPY --from=kernel_builder /src/linux/arch/arm/boot/dts/allwinner/sun8i-a33-ga36mb.dtb ./dtb/a33.dtb
+COPY --from=kernel_builder /src/linux/arch/arm/boot/dts/allwinner/sun8i-a23-ga36mb.dtb ./dtb/a23.dtb
 COPY --from=kernel_builder /src/linux/.config ./kernel_config.txt

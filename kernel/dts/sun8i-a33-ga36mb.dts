@@ -170,6 +170,7 @@
 
     panel@0 {
         compatible = "boe,jd9366";
+        panel-id = <1>;
         reg = <0>;
         power-supply = <&reg_dc1sw>;
         reset-gpios = <&pio 7 7 GPIO_ACTIVE_LOW>;

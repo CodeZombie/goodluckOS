@@ -242,6 +242,13 @@
         btn-start-gpios = <&pio 4 4 GPIO_ACTIVE_LOW>;
         btn-select-gpios = <&pio 4 5 GPIO_ACTIVE_LOW>;
         btn-fn-gpios = <&pio 4 1 GPIO_ACTIVE_LOW>;
+
+        /*
+         * Both left stick axes are inverted by the driver by default.
+         * Uncomment to report an axis as-is on units where it is not inverted.
+         */
+        // ga36mb,left-stick-no-invert-x;
+        // ga36mb,left-stick-no-invert-y;
     };
 };
 

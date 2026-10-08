@@ -36,6 +36,9 @@ struct gamepad {
 
     u8 packet[8];
     int idx;
+
+    bool invert_lx;
+    bool invert_ly;
 };
 
 static void gamepad_poll(struct work_struct *work) {
@@ -99,8 +102,10 @@ static size_t serial_analog_sticks_receive_buf(struct serdev_device *serdev, con
             if (gp->packet[7] == 0x00) {
 
                 // The left stick is physically inverted compared to the right stick.
-                input_report_abs(gp->idev, ABS_X,  255 - gp->packet[3]);
-                input_report_abs(gp->idev, ABS_Y,  255 - gp->packet[4]);
+                // Units where an axis is not inverted can opt out per axis
+                // through the device tree, see gamepad_probe().
+                input_report_abs(gp->idev, ABS_X,  gp->invert_lx ? 255 - gp->packet[3] : gp->packet[3]);
+                input_report_abs(gp->idev, ABS_Y,  gp->invert_ly ? 255 - gp->packet[4] : gp->packet[4]);
                 input_report_abs(gp->idev, ABS_RX, gp->packet[5]);
                 input_report_abs(gp->idev, ABS_RY, gp->packet[6]);
 
@@ -131,6 +136,10 @@ static int gamepad_probe(struct serdev_device *serdev)
     gp->serdev = serdev;
     serdev_device_set_drvdata(serdev, gp);
     serdev_device_set_client_ops(serdev, &serial_analog_sticks_ops);
+
+    /* Both left stick axes are inverted unless the device tree opts out */
+    gp->invert_lx = !of_property_read_bool(serdev->dev.of_node, "ga36mb,left-stick-no-invert-x");
+    gp->invert_ly = !of_property_read_bool(serdev->dev.of_node, "ga36mb,left-stick-no-invert-y");
 
     err = serdev_device_open(serdev);
     if (err) {

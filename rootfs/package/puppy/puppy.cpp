@@ -44,6 +44,8 @@ constexpr int kBorder               = 3;
 constexpr Uint32 kIdleCheckMs       = 60000;
 constexpr Uint32 kRepeatDelayMs     = 350;  // holding a direction repeats it after this...
 constexpr Uint32 kRepeatRateMs      = 60;   // ...and then this often
+constexpr int kStickPress           = 16000; // left stick counts as a direction past about half travel...
+constexpr int kStickRelease         = 8000;  // ...and lets go below about a quarter (axes span +-32767)
 constexpr size_t kMaxCachedIcons    = 64;
 
 constexpr SDL_Color kWhite  {255, 255, 255, 255};
@@ -708,6 +710,25 @@ static Action actionFromButton(Uint8 b) {
     }
 }
 
+// Maps the left stick onto the same Up/Down/Left/Right actions as the d-pad. `current` is the
+// direction the stick is already holding (or None). A held direction is kept until the stick falls
+// back towards centre, and only changes on a deliberate push, so a stick that wobbles sideways while
+// springing back doesn't produce a stray move.
+static Action actionFromStick(int x, int y, Action current) {
+    int ax = std::abs(x), ay = std::abs(y);
+    Action dir = ax >= ay ? (x < 0 ? Action::Left : Action::Right)
+                          : (y < 0 ? Action::Up   : Action::Down);
+    int pushed = std::max(ax, ay);
+    if (isDirection(current)) {
+        if (dir != current && pushed >= kStickPress) return dir;
+        int along = current == Action::Left  ? -x
+                  : current == Action::Right ?  x
+                  : current == Action::Up    ? -y : y;
+        return along >= kStickRelease ? current : Action::None;
+    }
+    return pushed >= kStickPress ? dir : Action::None;
+}
+
 int main() {
     Model model;
     model.categories = loadCatalog();
@@ -736,6 +757,8 @@ int main() {
     Uint32 lastActivity = SDL_GetTicks();
     Action held = Action::None;
     Uint32 nextRepeat = 0;
+    int stickX = 0, stickY = 0;
+    Action stickDir = Action::None;
 
     while (running) {
         if (dirty) {
@@ -781,6 +804,18 @@ int main() {
                 case SDL_CONTROLLERBUTTONDOWN:
                     action = actionFromButton(ev.cbutton.button);
                     break;
+                case SDL_CONTROLLERAXISMOTION: {
+                    if (ev.caxis.axis == SDL_CONTROLLER_AXIS_LEFTX)      stickX = ev.caxis.value;
+                    else if (ev.caxis.axis == SDL_CONTROLLER_AXIS_LEFTY) stickY = ev.caxis.value;
+                    else break;
+                    Action dir = actionFromStick(stickX, stickY, stickDir);
+                    if (dir != stickDir) {
+                        if (held == stickDir) held = Action::None; // the stick was driving the repeat
+                        stickDir = dir;
+                        action = dir;  // None on release; a direction acts like a d-pad press
+                    }
+                    break;
+                }
                 case SDL_KEYUP:
                     if (actionFromKey(ev.key.keysym.sym) == held) held = Action::None;
                     break;

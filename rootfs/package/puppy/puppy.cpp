@@ -680,7 +680,7 @@ private:
     }
 };
 
-enum class Action { None, Up, Down, Left, Right, Launch, ToggleAutoStart };
+enum class Action { None, Up, Down, Left, Right, Launch, ToggleAutoStart, First, Last };
 
 static Action actionFromKey(SDL_Keycode k) {
     switch (k) {
@@ -706,6 +706,8 @@ static Action actionFromButton(Uint8 b) {
         case SDL_CONTROLLER_BUTTON_DPAD_RIGHT: return Action::Right;
         case SDL_CONTROLLER_BUTTON_A:          return Action::Launch;
         case SDL_CONTROLLER_BUTTON_Y:          return Action::ToggleAutoStart;
+        case SDL_CONTROLLER_BUTTON_LEFTSTICK:  return Action::First;  // click: jump to the start of the row
+        case SDL_CONTROLLER_BUTTON_RIGHTSTICK: return Action::Last;   // click: jump to the end of the row
         default:                               return Action::None;
     }
 }
@@ -835,6 +837,8 @@ int main() {
                 case Action::Left:  model.move(-1, 0); break;
                 case Action::Right: model.move(1, 0);  break;
                 case Action::ToggleAutoStart: toggleAutoStart(model); break;
+                case Action::First: model.col() = 0; break;
+                case Action::Last:  model.col() = std::max((int)model.categories[model.row].entries.size() - 1, 0); break;
                 case Action::Launch:
                     held = Action::None;
                     if (const Entry* e = model.selected()) {

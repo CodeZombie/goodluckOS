@@ -8,6 +8,11 @@ n=0
 until mkdir "$L" 2>/dev/null; do n=$((n + 1)); [ $n -ge 30 ] && break; sleep 1; done
 trap 'rmdir "$L"' EXIT
 
+# Shows or hides the card on the PC (MTP). Only while umtprd runs: started by -cmd, it'd become the daemon
+mtp() {
+    [ -f /run/umtprd.pid ] && kill -0 "$(cat /run/umtprd.pid)" 2>/dev/null && umtprd "-cmd:$1:External card" >/dev/null 2>&1
+}
+
 case "$1" in
     add)
         # already mounted and readable; a mount left from a card that came out isn't
@@ -25,10 +30,16 @@ case "$1" in
         if [ ! -d "$M/roms" ]; then
             for d in nes snes gba gbc gb psx genesis sms gg segacd; do mkdir -p "$M/roms/$d/icons"; done
         fi
+        mtp mount
         ;;
     remove)
+        mountpoint -q "$M" && mtp unmount
         sync
         while mountpoint -q "$M"; do umount "$M" 2>/dev/null || umount -l "$M"; done
+        ;;
+    mtp)
+        # a card mounted before umtprd started (S30usb-gadget)
+        mountpoint -q "$M" && mtp mount
         ;;
 esac
 exit 0

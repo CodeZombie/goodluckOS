@@ -1,0 +1,201 @@
+From 806536da480350ee50712d92c786b6fc1af8fea3 Mon Sep 17 00:00:00 2001
+From: huangjf <hjf@t-chip.com.cn>
+Date: Tue, 27 Jan 2026 11:03:21 +0800
+Subject: [PATCH] Fixed the issue where the hash table database was not updated
+ when renaming files
+
+Upstream: https://github.com/viveris/uMTP-Responder/commit/806536da480350ee50712d92c786b6fc1af8fea3
+---
+ inc/hash_utils.h     |  4 ++-
+ src/hash_utils.c     | 30 ++++++++++++++++-
+ src/mtp_properties.c | 77 +++++++++++++++++++++++---------------------
+ 3 files changed, 72 insertions(+), 39 deletions(-)
+
+diff --git a/inc/hash_utils.h b/inc/hash_utils.h
+index 6a624fc..67bd93e 100644
+--- a/inc/hash_utils.h
++++ b/inc/hash_utils.h
+@@ -35,6 +35,8 @@ uint32_t hash_function_handle(uint32_t handle);
+ int allocate_pool_block(fs_handles_db *db);
+ void insert_entry_generic(hash_node *node, fs_entry* entry);
+ void insert_entry(fs_handles_db *db, fs_entry *entry);
++void remove_entry_generic(hash_node *node, fs_entry *entry);
+ fs_entry *find_entry(fs_handles_db *db, const char *name, uint32_t parent, uint32_t storage_id);
++void remove_entry(fs_handles_db *db, fs_entry *entry);
+ 
+-#endif // _INC_HASH_UTILS_H_
+\ No newline at end of file
++#endif // _INC_HASH_UTILS_H_
+diff --git a/src/hash_utils.c b/src/hash_utils.c
+index 3cdf38d..a155f41 100644
+--- a/src/hash_utils.c
++++ b/src/hash_utils.c
+@@ -156,4 +156,32 @@ fs_entry *find_entry(fs_handles_db *db, const char *name, uint32_t parent, uint3
+ 	}
+ 
+ 	return NULL;
+-}
+\ No newline at end of file
++}
++
++void remove_entry_generic(hash_node *node, fs_entry *entry_to_remove)
++{
++	for (int i = 0; i < node->size; i++) {
++		if (node->entries[i] == entry_to_remove) {
++			// Move remaining entries forward to fill the gap
++			for (int j = i; j < node->size - 1; j++) {
++				node->entries[j] = node->entries[j + 1];
++			}
++			node->size--;
++			break;
++		}
++	}
++}
++
++void remove_entry(fs_handles_db *db, fs_entry *entry_to_remove)
++{
++	// Remove from name hash table
++	uint32_t index_name = hash_function_name(entry_to_remove->name) % HASH_TABLE_SIZE;
++	hash_node *node_name = &db->hash_table_by_name[index_name];
++
++	// Remove from handle hash table
++	uint32_t index_handle = hash_function_handle(entry_to_remove->handle) % HASH_TABLE_SIZE;
++	hash_node *node_handle = &db->hash_table_by_handle[index_handle];
++
++	remove_entry_generic(node_name, entry_to_remove);
++	remove_entry_generic(node_handle, entry_to_remove);
++}
+diff --git a/src/mtp_properties.c b/src/mtp_properties.c
+index ed780de..40697b2 100644
+--- a/src/mtp_properties.c
++++ b/src/mtp_properties.c
+@@ -41,6 +41,7 @@
+ #include "mtp_properties.h"
+ 
+ #include "fs_handles_db.h"
++#include "hash_utils.h"
+ #include "usb_gadget_fct.h"
+ 
+ #include "logs_out.h"
+@@ -447,14 +448,35 @@ int build_properties_supported_dataset(mtp_ctx * ctx,void * buffer, int maxsize,
+ 	return ofs;
+ }
+ 
++static char * getObjectPropFilename(MTP_PACKET_HEADER * mtp_packet_hdr)
++{
++	char * filename;
++	unsigned int stringlen;
++
++	filename = malloc(FS_HANDLE_MAX_FILENAME_SIZE + 1);
++	if( !filename )
++		return NULL;
++
++	memset(filename,0,FS_HANDLE_MAX_FILENAME_SIZE + 1);
++
++	stringlen = peek(mtp_packet_hdr, sizeof(MTP_PACKET_HEADER), 1);
++
++	if( stringlen > FS_HANDLE_MAX_FILENAME_SIZE + 1)
++		stringlen = FS_HANDLE_MAX_FILENAME_SIZE + 1;
++
++	unicode2charstring(filename, (uint16_t *) ((char*)(mtp_packet_hdr) + sizeof(MTP_PACKET_HEADER) + 1), FS_HANDLE_MAX_FILENAME_SIZE + 1);
++	filename[ FS_HANDLE_MAX_FILENAME_SIZE ] = 0;
++
++	return filename;
++}
++
+ int setObjectPropValue(mtp_ctx * ctx,MTP_PACKET_HEADER * mtp_packet_hdr, uint32_t handle,uint32_t prop_code)
+ {
+ 	fs_entry * entry;
+ 	char * path;
+ 	char * path2;
+ 	char * old_filename;
+-	char tmpstr[256+1];
+-	unsigned int stringlen;
++	char * new_filename;
+ 	uint32_t response_code;
+ 	int ret;
+ 
+@@ -478,44 +500,27 @@ int setObjectPropValue(mtp_ctx * ctx,MTP_PACKET_HEADER * mtp_packet_hdr, uint32_
+ 				if(!path)
+ 					return MTP_RESPONSE_GENERAL_ERROR;
+ 
+-				memset(tmpstr,0,sizeof(tmpstr));
+-
+-				stringlen = peek(mtp_packet_hdr, sizeof(MTP_PACKET_HEADER), 1);
+-
+-				if( stringlen > sizeof(tmpstr))
+-					stringlen = sizeof(tmpstr);
+-
+-				unicode2charstring(tmpstr, (uint16_t *) ((char*)(mtp_packet_hdr) + sizeof(MTP_PACKET_HEADER) + 1), sizeof(tmpstr));
+-				tmpstr[ sizeof(tmpstr) - 1 ] = 0;
+-
+-				old_filename = entry->name;
+-
+-				entry->name = malloc(strlen(tmpstr)+1);
+-				if( entry->name )
+-				{
+-					strcpy(entry->name,tmpstr);
+-				}
+-				else
++				new_filename = getObjectPropFilename(mtp_packet_hdr);
++				if(!new_filename)
+ 				{
+-					entry->name = old_filename;
++					free(path);
+ 					return MTP_RESPONSE_GENERAL_ERROR;
+ 				}
+ 
++				old_filename = entry->name;
++
++				entry->name = new_filename;
+ 				path2 = build_full_path(ctx->fs_db, mtp_get_storage_root(ctx, entry->storage_id), entry);
+ 				if(!path2)
+ 				{
+-					if( old_filename )
+-					{
+-						if(entry->name)
+-							free(entry->name);
+-
+-						entry->name = old_filename;
+-					}
+-
++					entry->name = old_filename;
+ 					free(path);
++					free(new_filename);
+ 					return MTP_RESPONSE_GENERAL_ERROR;
+ 				}
+ 
++				entry->name = old_filename;
++
+ 				ret = -1;
+ 
+ 				if(!set_storage_giduid(ctx, entry->storage_id))
+@@ -528,19 +533,17 @@ int setObjectPropValue(mtp_ctx * ctx,MTP_PACKET_HEADER * mtp_packet_hdr, uint32_
+ 				{
+ 					PRINT_ERROR("setObjectPropValue : Can't rename %s to %s", path, path2);
+ 
+-					if( old_filename )
+-					{
+-						if(entry->name)
+-							free(entry->name);
+-
+-						entry->name = old_filename;
+-					}
+-
+ 					free(path);
+ 					free(path2);
++					free(new_filename);
+ 					return MTP_RESPONSE_GENERAL_ERROR;
+ 				}
+ 
++				remove_entry(ctx->fs_db, entry);
++				entry->name = new_filename;
++				insert_entry(ctx->fs_db, entry);
++				free(old_filename);
++
+ 				free(path);
+ 				free(path2);
+ 				return MTP_RESPONSE_OK;
+-- 
+2.47.3
+

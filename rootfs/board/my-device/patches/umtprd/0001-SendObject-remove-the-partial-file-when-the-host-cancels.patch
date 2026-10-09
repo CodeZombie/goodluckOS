@@ -1,0 +1,45 @@
+From: alvesmaicon <alvesmaiconn@gmail.com>
+Subject: [PATCH] SendObject: remove the partial file when the host cancels
+
+When the host cancels a SendObject (the user cancels a copy in the file
+manager), the data loop stops, the file is closed and the operation
+returns with no response, but the part already written stays on the
+storage. The host no longer lists it, so it takes space the user can't
+see or free from the host.
+
+Remove the file and its entry, as DeleteObject does, and forget the
+object handle. A cancelled SendPartialObject keeps its file: it edits a
+file that was already there.
+
+Upstream: not sent yet (viveris/uMTP-Responder, master has the same code)
+---
+--- a/src/mtp_operations/mtp_op_sendobject.c
++++ b/src/mtp_operations/mtp_op_sendobject.c
+@@ -39,6 +39,7 @@
+ #include "mtp_helpers.h"
+ #include "mtp_constant.h"
+ #include "mtp_operations.h"
++#include "mtp_ops_helpers.h"
+ 
+ #include "usb_gadget_fct.h"
+ 
+@@ -154,6 +155,19 @@
+ 						{
+ 							ctx->cancel_req = 0;
+ 
++							// The host gave the object up: don't leave the part already written behind,
++							// unseen by the host but taking space. A partial send edits a file that
++							// was already there, so that one stays.
++							if( mtp_packet_hdr->code != MTP_OPERATION_SEND_PARTIAL_OBJECT )
++							{
++								if( !set_storage_giduid( ctx, entry->storage_id ) )
++									delete_tree( ctx, ctx->SendObjInfoHandle );
++
++								restore_giduid( ctx );
++
++								ctx->SendObjInfoHandle = 0xFFFFFFFF;
++							}
++
+ 							pthread_mutex_unlock( &ctx->inotify_mutex );
+ 
+ 							return MTP_RESPONSE_NO_RESPONSE;

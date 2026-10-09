@@ -152,7 +152,9 @@
 
 &codec {
     status = "okay";
-    allwinner,audio-routing = "Speaker", "HP";
+    allwinner,audio-routing = "Speaker", "HP",
+        "Headphone", "HP",
+        "Headphone", "HPCOM";	/* direct drive: the jack's return is HPCOM */
     allwinner,pa-gpios = <&pio 7 9 GPIO_ACTIVE_HIGH>; /* PH09 */
 };
 

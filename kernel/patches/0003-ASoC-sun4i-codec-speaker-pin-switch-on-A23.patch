@@ -1,0 +1,38 @@
+From: alvesmaicon <alvesmaiconn@gmail.com>
+Subject: [PATCH] ASoC: sun4i-codec: speaker pin switch on the A23 card
+
+sun8i_a23_codec_create_card() never sets card->controls, so there is no
+way for userspace to mute the "Speaker" widget on its own. On a board
+with no headphone jack detection, that means the speaker and headphones
+always play together, with nothing to turn either one off.
+
+The sun50i-h616 card in this same driver already solves this with
+SOC_DAPM_PIN_SWITCH("Speaker"), which shows up in ALSA as a "Speaker
+Switch" control. Wire the same thing up for the A23 card.
+
+Not yet tested on real A23 hardware.
+
+diff --git a/sound/soc/sunxi/sun4i-codec.c b/sound/soc/sunxi/sun4i-codec.c
+index 93f511fb6..1c7d1b8f5 100644
+--- a/sound/soc/sunxi/sun4i-codec.c
++++ b/sound/soc/sunxi/sun4i-codec.c
+@@ -1764,6 +1764,10 @@ static const struct snd_soc_dapm_route sun8i_codec_card_routes[] = {
+ 	{ "Right DAC", NULL, "Codec Playback" },
+ };
+ 
++static const struct snd_kcontrol_new sun8i_a23_card_controls[] = {
++	SOC_DAPM_PIN_SWITCH("Speaker"),
++};
++
+ static struct snd_soc_aux_dev aux_dev = {
+ 	.dlc = COMP_EMPTY(),
+ };
+@@ -1792,6 +1796,8 @@ static struct snd_soc_card *sun8i_a23_codec_create_card(struct device *dev)
+ 	card->dev		= dev;
+ 	card->owner		= THIS_MODULE;
+ 	card->name		= "A23 Audio Codec";
++	card->controls		= sun8i_a23_card_controls;
++	card->num_controls	= ARRAY_SIZE(sun8i_a23_card_controls);
+ 	card->dapm_widgets	= sun6i_codec_card_dapm_widgets;
+ 	card->num_dapm_widgets	= ARRAY_SIZE(sun6i_codec_card_dapm_widgets);
+ 	card->dapm_routes	= sun8i_codec_card_routes;

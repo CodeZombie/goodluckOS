@@ -201,13 +201,13 @@ RUN mkbootimg \
     --pagesize 2048 \
     -o /src/android_boot_a33_panel1.img
 
-    RUN mkbootimg \
-        --kernel arch/arm/boot/zImage_with_dtb_a33_panel2 \
-        --ramdisk empty_ramdisk \
-        --base 0x40000000 \
-        --board sun8i \
-        --pagesize 2048 \
-        -o /src/android_boot_a33_panel2.img
+RUN mkbootimg \
+    --kernel arch/arm/boot/zImage_with_dtb_a33_panel2 \
+    --ramdisk empty_ramdisk \
+    --base 0x40000000 \
+    --board sun8i \
+    --pagesize 2048 \
+    -o /src/android_boot_a33_panel2.img
 
 FROM scratch AS artifacts
 COPY --from=kernel_builder /src/android_boot_a23_panel1.img ./android_boot_a23_panel1.img

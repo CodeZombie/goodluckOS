@@ -14,6 +14,13 @@ ICON=/usr/share/icons/poweroff.png
 
 [ENTRY]
 CATEGORY=System
+NAME=Eject TF-2
+DESCRIPTION=Eject the microSD card in the TF-2 slot.
+COMMAND=doas umount /media/external
+ICON=/usr/share/icons/poweroff.png
+
+[ENTRY]
+CATEGORY=System
 NAME=System Settings
 DESCRIPTION=Modify your system's settings
 COMMAND=system-settings
@@ -25,6 +32,19 @@ NAME=Resize Home
 DESCRIPTION=Resize your HOME partition
 COMMAND=resize-home
 ICON=/usr/share/icons/resize-home.png
+
+[ENTRY]
+CATEGORY=System
+NAME=User Guide
+DESCRIPTION=Learn how to use goodluckOS
+TERMINAL=1
+COMMAND=doas evsieve --input /dev/input/event2 grab --map btn:dpad_up key:up --map btn:dpad_down key:down --output repeat=enable & less /usr/share/doc/user_guide.txt
+
+[ENTRY]
+CATEGORY=System
+NAME=Credits
+DESCRIPTION=Learn about the people who made goodluckOS
+COMMAND=credits /usr/share/credits/credits.ini
 
 [ENTRY]
 CATEGORY=Terminal
@@ -53,6 +73,13 @@ NAME=Dmesg
 DESCRIPTION=View kernel logs
 TERMINAL=1
 COMMAND=doas evsieve --input /dev/input/event2 grab --map btn:dpad_up key:up --map btn:dpad_down key:down --map btn:dpad_left key:pageup --map btn:dpad_right key:pagedown --map btn:south key:q --output repeat=enable & sed -E 's/^.{16}//' /var/log/messages | less -m
+
+[ENTRY]
+CATEGORY=Terminal
+NAME=Lsblk
+DESCRIPTION=View connected storage volumes
+TERMINAL=1
+COMMAND=doas evsieve --input /dev/input/event2 grab --map btn:dpad_up key:up --map btn:dpad_down key:down --map btn:dpad_left key:pageup --map btn:dpad_right key:pagedown --map btn:south key:q --output repeat=enable & lsblk | less -m
 
 [ENTRY]
 CATEGORY=Emulators/Frontends

@@ -11,7 +11,7 @@ ENV ARCH=arm
 ENV CROSS_COMPILE=arm-linux-gnueabihf-
 
 WORKDIR /src
-RUN git clone --depth=1 -b linux-7.2.y https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git
+RUN git clone --depth=1 -b v7.2.9 https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git
 
 WORKDIR /src/linux
 

@@ -1,0 +1,10 @@
+config BR2_PACKAGE_CREDITS
+	bool "CREDITS"
+	depends on BR2_INSTALL_LIBSTDCPP # C++ is required
+	select BR2_PACKAGE_SDL2
+	select BR2_PACKAGE_SDL2_TTF
+	help
+	  Credits Visualizer.
+
+comment "credits needs a toolchain w/ C++"
+	depends on !BR2_INSTALL_LIBSTDCPP

@@ -1,0 +1,10 @@
+How To Use goodluckOS
+    Welcome to goodluckOS!
+
+Button Shortcuts
+    START + SELECT      : Gracefully close running application
+    START + SELECT + FN : Kill running application
+    FN + VOL UP/DOWN    : Adjust screen brightness
+    FN + UP             : Show CPU/GPU stat graph
+    FN + DOWN           : Toggle audio output (Speaker or Headphones)
+    POWER               : Toggle the screen

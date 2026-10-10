@@ -1,0 +1,3 @@
+/dts-v1/;
+#include "ga36mb-a23.dtsi"
+#include "panel-2.dtsi"

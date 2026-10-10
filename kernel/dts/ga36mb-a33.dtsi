@@ -1,0 +1,61 @@
+#include "sun8i-a33.dtsi"
+#include "ga36mb.dtsi"
+
+/ {
+    model = "GA36-MB A33";
+    compatible = "ga36mb,ga36mb-a33-handheld",
+    "allwinner,sun8i-a33";
+
+    speaker_amp: audio-amplifier {
+		compatible = "simple-audio-amplifier";
+		enable-gpios = <&pio 7 9 GPIO_ACTIVE_HIGH>; /* PH09 */
+		sound-name-prefix = "Speaker Amp";
+	};
+};
+
+&sound {
+	status = "okay";
+	simple-audio-card,name = "GA36mbAudio";
+
+    simple-audio-card,aux-devs = <&codec_analog>, <&speaker_amp>;
+
+	simple-audio-card,widgets =
+		"Speaker", "Speaker",
+		"Headphone", "Headphone Jack";
+
+	simple-audio-card,pin-switches = "Speaker";	/* no jack detection */
+
+	simple-audio-card,routing =
+        "Left DAC", "DACL",
+		"Right DAC", "DACR",
+		"Speaker Amp INL", "HP",
+		"Speaker Amp INR", "HP",
+		"Speaker", "Speaker Amp OUTL",
+		"Speaker", "Speaker Amp OUTR",
+		"Headphone Jack", "HP",
+		"Headphone Jack", "HPCOM";	/* direct drive: the jack's return is HPCOM */
+};
+
+&dai {
+	status = "okay";
+};
+
+// The base sun8i-a33.dtsi's opp table only goes up to 1.008ghz.
+// The CPU can safely scale up to 1.5ghz, but for stability (and thermal) reasons, we're just going to let it go up to 1.2 for now.
+// TODO: stress test the cpu with passive cooling at 1.5ghz.
+&cpu0_opp_table {
+    opp-1104000000 {
+        opp-hz = /bits/ 64 <1104000000>;
+        opp-microvolt = <1320000>;
+        clock-latency-ns = <244144>;
+    };
+    opp-1200000000 {
+        opp-hz = /bits/ 64 <1200000000>;
+        opp-microvolt = <1320000>;
+        clock-latency-ns = <244144>;
+    };
+};
+
+&ths {
+    status = "okay";
+};

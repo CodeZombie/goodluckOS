@@ -1,14 +1,8 @@
-/dts-v1/;
-#include "sun8i-a23.dtsi"
 #include <dt-bindings/input/linux-event-codes.h>
 #include <dt-bindings/gpio/gpio.h>
 #include <dt-bindings/leds/common.h>
 
 / {
-    model = "GA36-MB A23";
-    compatible = "ga36mb,ga36mb-a23-handheld",
-    "allwinner,sun8i-a23";
-
     aliases {
         /* Map ttyS0 to UART1 and ttyS1 to UART2 */
         serial0 = &uart1;
@@ -17,63 +11,22 @@
         mmc0 = &mmc0;
         mmc1 = &mmc1;
     };
+
     chosen {
         /* Point default output to serial1 (UART2) */
         stdout-path = "serial1:115200n8";
     };
+
     memory@40000000 {
         device_type = "memory";
-        reg = <0x40000000 0x20000000>; /* VERIFY */
-    };
-
-    soc {
-        ths: ths@1c25000 {
-			compatible = "allwinner,sun8i-a33-ths";
-			reg = <0x01c25000 0x100>;
-			#thermal-sensor-cells = <0>;
-			#io-channel-cells = <0>;
-		};
-
-		dsi: dsi@1ca0000 {
-			compatible = "allwinner,sun6i-a31-mipi-dsi";
-			reg = <0x01ca0000 0x1000>;
-			interrupts = <GIC_SPI 89 IRQ_TYPE_LEVEL_HIGH>;
-			clocks = <&ccu CLK_BUS_MIPI_DSI>,
-				 <&ccu CLK_DSI_SCLK>;
-			clock-names = "bus", "mod";
-			resets = <&ccu RST_BUS_MIPI_DSI>;
-			phys = <&dphy>;
-			phy-names = "dphy";
-			status = "disabled";
-			#address-cells = <1>;
-			#size-cells = <0>;
-
-			port {
-				dsi_in_tcon0: endpoint {
-					remote-endpoint = <&tcon0_out_dsi>;
-				};
-			};
-		};
-
-		dphy: d-phy@1ca1000 {
-			compatible = "allwinner,sun6i-a31-mipi-dphy";
-			reg = <0x01ca1000 0x1000>;
-			interrupts = <GIC_SPI 89 IRQ_TYPE_LEVEL_HIGH>;
-			clocks = <&ccu CLK_BUS_MIPI_DSI>,
-				 <&ccu CLK_DSI_DPHY>;
-			clock-names = "bus", "mod";
-			resets = <&ccu RST_BUS_MIPI_DSI>;
-			status = "disabled";
-			#phy-cells = <0>;
-		};
+        reg = <0x40000000 0x20000000>;
     };
 
     backlight: backlight {
         compatible = "pwm-backlight";
         pwms = <&pwm 0 50000 0>; /* fex: lcd_pwm_ch = 0, lcd_pwm_freq = 20000 Hz -> 50000 ns, lcd_pwm_pol = 0 -> non-inverted */
         brightness-levels = <0 10 20 30 40 50 60 70 80 90 100>;
-        default-brightness-level = <5>;	/* fex: lcd0_bright = 50 */
-        //power-supply = <&reg_dc1sw>;	/* fex: lcd_power = axp22_dc1sw */
+        default-brightness-level = <1>;	/* fex: lcd0_bright = 50 */
     };
 
     bat: battery {
@@ -111,20 +64,8 @@
             default-state = "off";
         };
     };
-
 };
 
-&tcon0_out {
-	#address-cells = <1>;
-	#size-cells = <0>;
-
-	tcon0_out_dsi: endpoint@1 {
-		reg = <1>;
-		remote-endpoint = <&dsi_in_tcon0>;
-	};
-};
-
-/* Volume buttons */
 &lradc {
 	vref-supply = <&dummy_vref>;
 	status = "okay";
@@ -145,17 +86,8 @@
 	};
 };
 
-
-&ths {
-    status = "okay";
-};
-
 &codec {
-    status = "okay";
-    allwinner,audio-routing = "Speaker", "HP",
-        "Headphone", "HP",
-        "Headphone", "HPCOM";	/* direct drive: the jack's return is HPCOM */
-    allwinner,pa-gpios = <&pio 7 9 GPIO_ACTIVE_HIGH>; /* PH09 */
+	status = "okay";
 };
 
 &codec_analog {
@@ -169,7 +101,6 @@
 };
 
 &pio {
-    /* I think this is correct? */
     vcc-pf-supply = <&reg_dcdc1>;
     vcc-pg-supply = <&reg_dcdc1>;
     vcc-ph-supply = <&reg_dcdc1>;
@@ -184,12 +115,6 @@
         pins = "PB0", "PB1";
         function = "uart2";
     };
-
-    usb0_id_det_pin: usb0-id-det-pin {
-        pins = "PH8";
-        function = "gpio_in";
-        bias-pull-up;
-    };
 };
 
 &dsi {
@@ -198,7 +123,6 @@
 
     panel@0 {
         compatible = "boe,jd9366";
-        panel-id = <1>;
         reg = <0>;
         power-supply = <&reg_dc1sw>;
         reset-gpios = <&pio 7 7 GPIO_ACTIVE_LOW>;
@@ -262,17 +186,20 @@
     vmmc-supply = <&reg_dcdc1>;
     status = "okay";
 };
+
 &mmc1 {
     bus-width = <4>;
     non-removable;
     pinctrl-names = "default";
     pinctrl-0 = <&mmc1_pg_pins>;
+    vmmc-supply = <&reg_dcdc1>;
     status = "okay";
 };
 
 &r_rsb_pins {
     bias-pull-up;
 };
+
 
 &r_rsb {
     status = "okay";
@@ -287,31 +214,12 @@
     };
 };
 
-
 &cpu0 {
     cpu-supply = <&reg_dcdc3>;
     #cooling-cells = <2>;
 };
 
-
-// The base sun8i-a33.dtsi's opp table only goes up to 1.008ghz.
-// The CPU can safely scale up to 1.5ghz, but for stability (and thermal) reasons, we're just going to let it go up to 1.2 for now.
-// TODO: stress test the cpu with passive cooling at 1.5ghz.
-// &cpu0_opp_table {
-//     opp-1104000000 {
-//         opp-hz = /bits/ 64 <1104000000>;
-//         opp-microvolt = <1320000>;
-//         clock-latency-ns = <244144>;
-//     };
-//     opp-1200000000 {
-//         opp-hz = /bits/ 64 <1200000000>;
-//         opp-microvolt = <1320000>;
-//         clock-latency-ns = <244144>;
-//     };
-// };
-
 #include "axp223.dtsi"
-
 
 &battery_power_supply {
     status = "okay";
@@ -331,25 +239,18 @@
 
 &reg_aldo3 {
     regulator-always-on;
-    // regulator-min-microvolt = <3000000>;
-    // regulator-max-microvolt = <3000000>;
     regulator-name = "vcc-aldo3";
 };
 
 &reg_dcdc1 {
     regulator-always-on;
-    // regulator-min-microvolt = <3300000>;
-    // regulator-max-microvolt = <3300000>;
     regulator-name = "vcc-io";
 };
 
 &reg_dcdc2 {
     regulator-always-on;
-    // regulator-min-microvolt = <1100000>;
-    // regulator-max-microvolt = <1100000>;
     regulator-name = "vdd-sys";
 };
-
 
 &reg_dcdc3 {
     regulator-always-on;
@@ -358,25 +259,18 @@
     regulator-name = "vdd-cpu";
 };
 
-
 &reg_dcdc5 {
     regulator-always-on;
-    // regulator-min-microvolt = <1500000>;
-    // regulator-max-microvolt = <1500000>;
     regulator-name = "vcc-dram";
 };
 
 &reg_dldo3 {
-    //regulator-always-on;
-    //regulator-boot-on;
-    //regulator-init-microvolt = <0>;
     regulator-min-microvolt = <3000000>;
     regulator-max-microvolt = <3000000>;
     regulator-name = "vcc-dldo3";
 };
 
 &reg_dc1sw {
-    //regulator-always-on;
     regulator-boot-on;
     regulator-name = "vcc-lcd";	/* fex: lcd_power = axp22_dc1sw */
 };
@@ -391,7 +285,6 @@
     regulator-name = "vdd-cpus-dc5ldo";
 };
 
-/* USB OTG port in host mode, per fex [usbc0] */
 &reg_drivevbus {
     regulator-name = "usb0-vbus";
     status = "okay";
@@ -403,11 +296,8 @@
 };
 
 &usbphy {
-    pinctrl-names = "default";
-    pinctrl-0 = <&usb0_id_det_pin>;
     usb0_id_det-gpios = <&pio 7 8 GPIO_ACTIVE_HIGH>;
     usb0_vbus_power-supply = <&usb_power_supply>;
-    usb0_vbus-supply = <&reg_drivevbus>;
     status = "okay";
 };
 

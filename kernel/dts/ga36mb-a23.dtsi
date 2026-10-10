@@ -1,0 +1,72 @@
+#include "sun8i-a23.dtsi"
+
+/ {
+    model = "GA36-MB A23";
+    compatible = "ga36mb,ga36mb-a23-handheld",
+    "allwinner,sun8i-a23";
+
+    soc {
+		dsi: dsi@1ca0000 {
+			compatible = "allwinner,sun6i-a31-mipi-dsi";
+			reg = <0x01ca0000 0x1000>;
+			interrupts = <GIC_SPI 89 IRQ_TYPE_LEVEL_HIGH>;
+			clocks = <&ccu CLK_BUS_MIPI_DSI>, <&ccu CLK_DSI_SCLK>;
+			clock-names = "bus", "mod";
+			resets = <&ccu RST_BUS_MIPI_DSI>;
+			phys = <&dphy>;
+			phy-names = "dphy";
+			status = "disabled";
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			port {
+				dsi_in_tcon0: endpoint {
+					remote-endpoint = <&tcon0_out_dsi>;
+				};
+			};
+		};
+		dphy: d-phy@1ca1000 {
+			compatible = "allwinner,sun6i-a31-mipi-dphy";
+			reg = <0x01ca1000 0x1000>;
+			interrupts = <GIC_SPI 89 IRQ_TYPE_LEVEL_HIGH>;
+			clocks = <&ccu CLK_BUS_MIPI_DSI>, <&ccu CLK_DSI_DPHY>;
+			clock-names = "bus", "mod";
+			resets = <&ccu RST_BUS_MIPI_DSI>;
+			status = "disabled";
+			#phy-cells = <0>;
+		};
+    };
+};
+
+#include "ga36mb.dtsi"
+
+&tcon0_out {
+	#address-cells = <1>;
+	#size-cells = <0>;
+
+	tcon0_out_dsi: endpoint@1 {
+		reg = <1>;
+		remote-endpoint = <&dsi_in_tcon0>;
+	};
+};
+
+&codec {
+    allwinner,audio-routing = "Speaker", "HP",
+        "Headphone", "HP",
+        "Headphone", "HPCOM";	/* direct drive: the jack's return is HPCOM */
+    allwinner,pa-gpios = <&pio 7 9 GPIO_ACTIVE_HIGH>; /* PH09 */
+};
+
+&pio {
+    usb0_id_det_pin: usb0-id-det-pin {
+        pins = "PH8";
+        function = "gpio_in";
+        bias-pull-up;
+    };
+};
+
+&usbphy {
+    pinctrl-names = "default";
+    pinctrl-0 = <&usb0_id_det_pin>;
+    usb0_vbus-supply = <&reg_drivevbus>;
+};

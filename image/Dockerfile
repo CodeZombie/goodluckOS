@@ -13,23 +13,21 @@ RUN apt-get update && \
 
 WORKDIR /workspace
 
-#######
-# A33 #
-#######
-RUN truncate -s 1G goodluck_a33.img && \
-    parted -a optimal -s goodluck_a33.img \
+ARG VARIANT
+
+RUN truncate -s 1G "goodluck_${VARIANT}.img" && \
+    parted -a optimal -s "goodluck_${VARIANT}.img" \
     mklabel msdos \
     mkpart primary ext4 128MiB 512MiB \
     mkpart primary fat32 512MiB 100%
 
-# COPY sdcard.img ./
-RUN dd if=/dev/zero of=goodluck_a33.img bs=512 skip=1 seek=1 count=262143 conv=notrunc
+RUN dd if=/dev/zero of="goodluck_${VARIANT}.img" bs=512 skip=1 seek=1 count=262143 conv=notrunc
 
-COPY staging/android_boot_a33.img ./
-RUN dd if=android_boot_a33.img of=goodluck_a33.img bs=512 seek=172032 conv=notrunc
+COPY "staging/android_boot_${VARIANT}.img" ./
+RUN dd if="android_boot_${VARIANT}.img" of="goodluck_${VARIANT}.img" bs=512 seek=172032 conv=notrunc
 
 COPY staging/rootfs.tar ./
-RUN guestfish -a goodluck_a33.img <<EOF
+RUN guestfish -a "goodluck_${VARIANT}.img" <<EOF
 run
 mkfs-opts ext4 /dev/sda1 label:linux
 mount /dev/sda1 /
@@ -38,7 +36,7 @@ umount /
 EOF
 
 COPY staging/home.tar ./
-RUN guestfish -a goodluck_a33.img <<EOF
+RUN guestfish -a "goodluck_${VARIANT}.img" <<EOF
 run
 mkfs-opts vfat /dev/sda2 label:HOME
 mount /dev/sda2 /
@@ -48,7 +46,7 @@ EOF
 
 # # Inject custom bootlogo
 # COPY res/goodluck_bootlogo.bmp ./goodluck_bootlogo.bmp
-# RUN guestfish -a goodluck_a33.img <<EOF
+# RUN guestfish -a goodluck_$VARIANT.img <<EOF
 # run
 # mount-vfs "offset=37748736" "vfat" /dev/sda /
 # upload goodluck_bootlogo.bmp /bootlogo.bmp
@@ -58,35 +56,35 @@ EOF
 #######
 # A23 #
 #######
-RUN truncate -s 1G goodluck_a23.img && \
-    parted -a optimal -s goodluck_a23.img \
-    mklabel msdos \
-    mkpart primary ext4 128MiB 512MiB \
-    mkpart primary fat32 512MiB 100%
-
-# COPY sdcard.img ./
-RUN dd if=/dev/zero of=goodluck_a23.img bs=512 skip=1 seek=1 count=262143 conv=notrunc
-
-COPY staging/android_boot_a23.img ./
-RUN dd if=android_boot_a23.img of=goodluck_a23.img bs=512 seek=172032 conv=notrunc
-
-COPY staging/rootfs.tar ./
-RUN guestfish -a goodluck_a23.img <<EOF
-run
-mkfs-opts ext4 /dev/sda1 label:linux
-mount /dev/sda1 /
-tar-in rootfs.tar /
-umount /
-EOF
-
-COPY staging/home.tar ./
-RUN guestfish -a goodluck_a23.img <<EOF
-run
-mkfs-opts vfat /dev/sda2 label:HOME
-mount /dev/sda2 /
-tar-in home.tar /
-umount /
-EOF
+# RUN truncate -s 1G goodluck_a23.img && \
+#     parted -a optimal -s goodluck_a23.img \
+#     mklabel msdos \
+#     mkpart primary ext4 128MiB 512MiB \
+#     mkpart primary fat32 512MiB 100%
+#
+# # COPY sdcard.img ./
+# RUN dd if=/dev/zero of=goodluck_a23.img bs=512 skip=1 seek=1 count=262143 conv=notrunc
+#
+# COPY staging/android_boot_a23.img ./
+# RUN dd if=android_boot_a23.img of=goodluck_a23.img bs=512 seek=172032 conv=notrunc
+#
+# COPY staging/rootfs.tar ./
+# RUN guestfish -a goodluck_a23.img <<EOF
+# run
+# mkfs-opts ext4 /dev/sda1 label:linux
+# mount /dev/sda1 /
+# tar-in rootfs.tar /
+# umount /
+# EOF
+#
+# COPY staging/home.tar ./
+# RUN guestfish -a goodluck_a23.img <<EOF
+# run
+# mkfs-opts vfat /dev/sda2 label:HOME
+# mount /dev/sda2 /
+# tar-in home.tar /
+# umount /
+# EOF
 
 # # Inject custom bootlogo
 # COPY res/goodluck_bootlogo.bmp ./goodluck_bootlogo.bmp
@@ -98,5 +96,6 @@ EOF
 # EOF
 
 FROM scratch AS export
-COPY --from=builder /workspace/goodluck_a33.img /goodluck_base_a33.img
-COPY --from=builder /workspace/goodluck_a23.img /goodluck_base_a23.img
+ARG VARIANT
+COPY --from=builder "/workspace/goodluck_${VARIANT}.img" "/goodluck_base_${VARIANT}.img"
+#COPY --from=builder /workspace/goodluck_a23.img /goodluck_base_a23.img

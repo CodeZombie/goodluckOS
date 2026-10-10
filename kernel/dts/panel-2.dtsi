@@ -1,0 +1,5 @@
+&dsi {
+    panel@0 {
+        panel-id = <2>;
+    };
+};

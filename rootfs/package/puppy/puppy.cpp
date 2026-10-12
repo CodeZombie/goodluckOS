@@ -574,12 +574,18 @@ static int readBattery() {
         int cap;
         if (capFile >> cap) {
             // The AXP223 fuel gauge can sit at 5% (it has to learn the battery) while the cell is fuller.
-            // At 5% or less, while discharging, a cell voltage that reads higher than that wins.
-            std::ifstream statusFile(it->path() / "status"), voltageFile(it->path() / "voltage_now");
+            // At 5% or less, a cell voltage that reads higher than that wins. The status can't gate this:
+            // the kernel says "Discharging" only when it measures a discharge current, else "Not charging".
+            // While charging, take off the drop across the cell's internal resistance (about 120 mOhm).
+            std::ifstream statusFile(it->path() / "status");
+            std::ifstream voltageFile(it->path() / "voltage_now"), currentFile(it->path() / "current_now");
             std::string status;
-            long microvolts;
-            if (cap <= 5 && (statusFile >> status) && status == "Discharging" && (voltageFile >> microvolts))
+            statusFile >> status;
+            long microvolts, microamps = 0;
+            if (cap <= 5 && (voltageFile >> microvolts)) {
+                if (status == "Charging" && (currentFile >> microamps)) microvolts -= std::abs(microamps) * 120 / 1000;
                 cap = std::max(cap, percentFromVoltage(microvolts));
+            }
             return std::clamp(cap, 0, 100);
         }
     }

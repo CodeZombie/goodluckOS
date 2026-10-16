@@ -3,6 +3,7 @@ The following icon files are part of the Apache-2.0-Licensed RemixIcon package.
     reboot.png
     resize-home.png
     system-settings.png
+    system-report.png
 
 This icon package is available at https://github.com/cyberalien/RemixIcon
 

@@ -1,0 +1,26 @@
+From: alvesmaicon <alvesmaiconn@gmail.com>
+Subject: [PATCH] mfd: axp20x: clear the BSP boot flag on power off
+
+The GA36-MB boots with Allwinner's BSP u-boot, which keeps a flag in the
+AXP22x data buffer register 0x0f. It writes 0x0e on every boot. When a
+charger brings the PMIC up, it shows its charger screen only if the
+flag is not 0x0e; otherwise it assumes the system was running and boots
+it. The BSP kernel writes 0x00 there on power off. Mainline never touches
+it, so plugging a charger into a powered off console boots the OS.
+
+Clear the flag before cutting the power on AXP221/AXP223.
+
+diff --git a/drivers/mfd/axp20x.c b/drivers/mfd/axp20x.c
+--- a/drivers/mfd/axp20x.c
++++ b/drivers/mfd/axp20x.c
+@@ -1252,6 +1252,10 @@
+ 		shutdown_reg = AXP20X_OFF_CTRL;
+ 		break;
+ 	}
++
++	/* the BSP u-boot skips its charger screen while this holds 0x0e */
++	if (axp20x->variant == AXP221_ID || axp20x->variant == AXP223_ID)
++		regmap_write(axp20x->regmap, AXP20X_DATACACHE(11), 0);
+ 
+ 	regmap_write(axp20x->regmap, shutdown_reg, AXP20X_OFF);
+ 

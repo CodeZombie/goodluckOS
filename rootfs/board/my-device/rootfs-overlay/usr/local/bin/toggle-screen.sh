@@ -29,7 +29,7 @@ else
     echo "1" > /sys/class/leds/blue:status/brightness
     echo 1 > "$FREEZE" 2>/dev/null
     for e in /sys/class/input/event*; do
-        [ "$(cat "$e/device/name")" = GA36-MB-Gamepad ] && pad=/dev/input/${e##*/}
+        [ "$(cat "$e/device/name")" = "GA36-MB Gamepad" ] && pad=/dev/input/${e##*/}
     done
     evsieve --input "$pad" grab >/dev/null 2>&1 &
     grab=$!

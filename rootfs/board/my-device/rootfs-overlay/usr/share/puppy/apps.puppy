@@ -17,7 +17,7 @@ CATEGORY=System
 NAME=Eject TF-2
 DESCRIPTION=Eject the microSD card in the TF-2 slot.
 COMMAND=doas umount /media/external
-ICON=/usr/share/icons/poweroff.png
+ICON=/usr/share/icons/eject-tf2.png
 
 [ENTRY]
 CATEGORY=System

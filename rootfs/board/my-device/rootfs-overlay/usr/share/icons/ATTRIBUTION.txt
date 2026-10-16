@@ -4,6 +4,8 @@ The following icon files are part of the Apache-2.0-Licensed RemixIcon package.
     resize-home.png
     system-settings.png
     eject-tf2.png
+    user-guide.png
+    credits.png
 
 This icon package is available at https://github.com/cyberalien/RemixIcon
 

@@ -1,5 +1,12 @@
 [ENTRY]
 CATEGORY=System
+NAME=Gallery
+DESCRIPTION=Your RetroArch screenshots and recordings
+COMMAND=gallery
+ICON=/usr/share/icons/gallery.png
+
+[ENTRY]
+CATEGORY=System
 NAME=Reboot
 DESCRIPTION=Reboot the device
 COMMAND=are-you-sure "Are you sure you want to reboot the device?" "doas /sbin/reboot"

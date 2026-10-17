@@ -8,3 +8,9 @@ Button Shortcuts
     FN + UP             : Show CPU/GPU stat graph
     FN + DOWN           : Toggle audio output (Speaker or Headphones)
     POWER               : Toggle the screen
+
+Gallery
+    LEFT / RIGHT        : Screenshots or Recordings (on the tabs)
+    A                   : Open full screen (recordings play), A or B closes it
+    X                   : Delete the selected file
+    B                   : Back to the tabs, then close the Gallery

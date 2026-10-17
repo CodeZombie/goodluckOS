@@ -11,4 +11,5 @@ source "../package/evsieve/Config.in"
 source "../package/credits/Config.in"
 source "../package/milkytracker/Config.in"
 source "../package/glos-setup/Config.in"
+source "../package/gallery/Config.in"
 endmenu

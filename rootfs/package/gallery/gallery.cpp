@@ -712,7 +712,7 @@ int main(int, char**) {
                 // the yarn in the launcher's yellow
                 const float big = 60, cy = kGridTop + (kH - kGridTop) / 2 - 52;
                 const char* ears = "/\\_/\\";
-                const char* face = "( \u2022\u03C9\u2022 )";   // ( •ω• )
+                const char* face = "( \u2022 \u2022 )";   // ( • • )
                 const char* thread = "  ~ ";
                 const char* yarn = "@";
                 const float faceW = textSize(uiFont, big, face).x, threadW = textSize(uiFont, big, thread).x;

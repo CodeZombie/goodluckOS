@@ -20,6 +20,8 @@ namespace fs = std::filesystem;
 static const char* kFontFile      = "/usr/share/fonts/Inter_24pt-Medium.ttf";
 static const char* kAppsFiles[]   = {"/usr/share/puppy/apps.puppy", "/home/player/apps.puppy"};
 static const char* kPuppyFiles[]   = {"/home/player/.local/share/applications"};
+static const char* kAppsDir        = "/home/player/apps";   // installed apps: a folder each, with an app.puppy
+static const char* kAppsCategory   = "Apps";
 //static const char* kLaunchFile    = "/dev/shm/launch";
 static const char* kStateFile     = "/dev/shm/launcher_state";
 static const char* kAutoStartFile = "/home/player/autolaunch";
@@ -482,6 +484,28 @@ static std::vector<Category> loadCatalog() {
         }
     }
 
+    // Installed apps (App Installer): every folder in HOME/apps with an app.puppy. Each runs in
+    // its own folder, and all of them go in the Apps row, by name.
+    std::vector<Record> apps;
+    std::error_code ec;
+    for (fs::directory_iterator it(kAppsDir, ec), end; !ec && it != end; it.increment(ec)) {
+        const std::string folder = it->path().filename().string();
+        std::error_code ec2;
+        if (folder.empty() || folder[0] == '.' || !it->is_directory(ec2)) continue;
+        std::vector<Record> found;
+        parseAppsFile((it->path() / "app.puppy").string(), found);
+        for (auto& rec : found) {
+            if (rec.isArchive) continue;
+            rec.entry.category = kAppsCategory;
+            rec.entry.command  = "cd " + shellQuote(it->path().string()) + " && " + rec.entry.command;
+            if (!rec.entry.iconPath.empty() && rec.entry.iconPath[0] != '/')
+                rec.entry.iconPath = (it->path() / rec.entry.iconPath).string();
+            apps.push_back(rec);
+        }
+    }
+    std::sort(apps.begin(), apps.end(), [](const Record& l, const Record& r) { return lower(l.entry.name) < lower(r.entry.name); });
+    for (const auto& rec : apps) upsert(records, rec);
+
     std::vector<Category> cats;
     for (const auto& rec : records) {
         if (rec.isArchive) {
@@ -490,6 +514,13 @@ static std::vector<Category> loadCatalog() {
             addToCategory(cats, rec.entry);
         }
     }
+
+    // The Apps row goes right below System, above Terminal; with no apps there is no row
+    auto isApps = [](const Category& c) { return c.name == kAppsCategory; };
+    auto appsRow = std::find_if(cats.begin(), cats.end(), isApps);
+    auto systemRow = std::find_if(cats.begin(), cats.end(), [](const Category& c) { return c.name == "System"; });
+    if (appsRow != cats.end() && systemRow != cats.end() && appsRow > systemRow + 1)
+        std::rotate(systemRow + 1, appsRow, appsRow + 1);
     return cats;
 }
 

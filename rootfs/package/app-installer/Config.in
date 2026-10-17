@@ -1,0 +1,12 @@
+config BR2_PACKAGE_APP_INSTALLER
+	bool "app-installer"
+	depends on BR2_INSTALL_LIBSTDCPP
+	select BR2_PACKAGE_SDL2
+	select BR2_PACKAGE_SDL2_IMAGE
+	select BR2_PACKAGE_IMGUI
+	select BR2_PACKAGE_ZLIB
+	help
+	  Installs apps from .zip files in HOME/apps, and uninstalls them.
+
+comment "app-installer needs a toolchain w/ C++"
+	depends on !BR2_INSTALL_LIBSTDCPP

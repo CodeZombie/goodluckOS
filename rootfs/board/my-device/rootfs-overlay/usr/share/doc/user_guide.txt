@@ -8,3 +8,10 @@ Button Shortcuts
     FN + UP             : Show CPU/GPU stat graph
     FN + DOWN           : Toggle audio output (Speaker or Headphones)
     POWER               : Toggle the screen
+
+App Installer
+    Copy app .zip files into the apps folder on HOME, then open App Installer:
+    LEFT / RIGHT        : Install Files or Installed Apps (on the tabs)
+    A                   : Install (or update) / uninstall the selected app
+    B                   : Back to the tabs, then close App Installer
+    Installed apps appear in the launcher's Apps row.

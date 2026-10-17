@@ -1,0 +1,126 @@
+#!/bin/sh
+# system-report: saves HOME/systemReport.txt to attach to bug reports (Puppy: System > System Report).
+# It only reads what is already there (/proc, /sys, the logs) and leaves out unique IDs:
+# serial numbers, UUIDs and MAC addresses.
+OUT=/home/player/systemReport.txt
+TMP=$OUT.tmp
+
+val() { cat "$1" 2>/dev/null || echo "?"; }                 # one /proc or /sys value
+section() { printf '\n== %s ==\n' "$1"; }
+gb() { awk '{ printf "%.1f GB", $1 * 512 / 1e9 }' "$1"; }  # sectors -> GB
+mhz() { awk '{ printf "%d", $1 / 1000 }' "$1" 2>/dev/null || echo "?"; }   # kHz -> MHz
+redact() {
+    sed -E -e 's/[0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}/<uuid>/g' \
+           -e 's/([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}/<mac>/g' \
+           -e 's/(serial[a-z_ ]*[:=] *)[^ ,]+/\1<removed>/Ig' \
+           -e 's/[0-9a-fA-F]{16,}/<id>/g'
+}
+fstype() {  # fstype <partition dir in /sys/block>: from udev, which can read the disk
+    t=$(sed -n 's/^E:ID_FS_TYPE=//p' "/run/udev/data/b$(val "$1/dev")" 2>/dev/null)
+    echo "${t:-unknown}"
+}
+card() {  # card <label> <mmcblkN>
+    b=/sys/block/$2
+    [ -e "$b" ] || { echo "$1: no card"; return; }
+    echo "$1: $(val "$b/device/type") card, $(gb "$b/size")"
+    for p in "$b/$2"p*; do
+        [ -e "$p" ] && echo "  partition ${p##*/}: $(fstype "$p"), $(gb "$p/size")"
+    done
+}
+mnt() {  # mnt <label> <mount point>
+    m=$(awk -v m="$2" '$2 == m { d = $1; t = $3 } END { if (d) print d, t }' /proc/mounts)
+    if [ -n "$m" ]; then
+        # shellcheck disable=SC2046,SC2086
+        set -- "$1" "$2" $m $(df -Ph "$2" | awk 'NR == 2 { print $2, $3, $4, $5 }')
+        printf '  %-8s %-15s %s (%s): %s total, %s used (%s), %s free\n' "$1" "$2" "$3" "$4" "$5" "$6" "$8" "$7"
+    else
+        printf '  %-8s %-15s not mounted\n' "$1" "$2"
+    fi
+}
+
+{
+    # shellcheck disable=SC1091
+    . /etc/os-release
+    echo "goodluckOS System Report"
+    echo "Attach or paste this whole file into your GitHub issue."
+    echo "Unique IDs (serial numbers, UUIDs, MAC addresses) are left out."
+
+    section "System"
+    echo "goodluckOS:   $VERSION"
+    echo "Kernel:       $(uname -r) ($(uname -m)), built $(uname -v)"
+    p=$(find /proc/device-tree/ -name panel-id 2>/dev/null | head -n 1)
+    panel=$([ -n "$p" ] && od -An -tu1 "$p" | awk '{ print $NF }')
+    echo "Device:       $(tr -d '\0' </proc/device-tree/model 2>/dev/null), panel ${panel:-?}"
+    echo "Boot options: $(redact </proc/cmdline)"
+    echo "Clock:        $(date '+%Y-%m-%d %H:%M') (may be wrong: the device has no clock battery)"
+    echo "Uptime:       $(uptime)"
+
+    section "CPU"
+    cf=/sys/devices/system/cpu/cpu0/cpufreq
+    echo "Model:        $(sed -n 's/^model name[[:space:]]*: //p' /proc/cpuinfo | head -n 1), $(grep -c '^processor' /proc/cpuinfo) cores"
+    echo "Frequency:    $(mhz $cf/scaling_cur_freq) MHz now, $(mhz $cf/scaling_min_freq)-$(mhz $cf/scaling_max_freq) MHz allowed, governor $(val $cf/scaling_governor)"
+    echo "Load average: $(cut -d' ' -f1-3 /proc/loadavg) (1, 5, 15 min)"
+
+    section "Memory (MB)"
+    free -m
+    echo "Swap is ZRAM (compressed RAM), algorithm: $(sed -n 's/.*\[\(.*\)\].*/\1/p' /sys/block/zram0/comp_algorithm 2>/dev/null)"
+
+    section "Battery and power"
+    for s in /sys/class/power_supply/*; do
+        if [ "$(val "$s/type")" = Battery ]; then
+            echo "Battery:      $(val "$s/capacity")%, $(val "$s/status"), health $(val "$s/health")"
+            echo "Voltage:      $(awk '{ printf "%.3f V", $1 / 1e6 }' "$s/voltage_now" 2>/dev/null)"
+            echo "Current:      $(awk '{ printf "%d mA", $1 / 1000 }' "$s/current_now" 2>/dev/null)"
+            echo "All values reported by ${s##*/}:"
+            grep -iv serial "$s/uevent" | sed 's/^POWER_SUPPLY_/  /'
+        else
+            echo "Power input ${s##*/} ($(val "$s/type")): $([ "$(val "$s/online")" = 1 ] && echo connected || echo not connected)"
+        fi
+    done
+
+    section "Temperature"
+    for z in /sys/class/thermal/thermal_zone*; do
+        [ -e "$z/temp" ] && echo "$(val "$z/type"): $(awk '{ printf "%.1f C", $1 / 1000 }' "$z/temp")"
+    done
+
+    section "Storage"
+    card "TF-1 (system card)" mmcblk0
+    card "TF-2 (second card)" mmcblk1
+    echo "Mounted:"
+    mnt System /
+    mnt HOME /home/player
+    mnt TF-2 /media/external
+
+    section "Audio"
+    echo "Sound cards:"
+    sed 's/^/  /' /proc/asound/cards
+    echo "Output:       $(/usr/local/bin/audio-output.sh get 2>/dev/null || echo '?')"
+    echo "Volume (Headphone control):"
+    amixer -c 0 sget Headphone | grep -E '^ +(Mono|Front Left|Front Right):'
+
+    section "USB and MTP (HOME on the PC)"
+    udc=$(ls /sys/class/udc 2>/dev/null | head -n 1)
+    echo "USB link:     $(val "/sys/class/udc/$udc/state") (configured = working with a PC, not attached = no PC)"
+    echo "Functions:    $(for f in /sys/kernel/config/usb_gadget/g1/configs/c.1/*; do [ -L "$f" ] && printf '%s ' "${f##*/}"; done)(acm = serial console, ffs.mtp = MTP)"
+    echo "MTP server:   $(pidof umtprd >/dev/null && echo running || echo not running)"
+    echo "USB gadget log:"
+    sed 's/^/  /' /tmp/usb-gadget.log 2>/dev/null
+
+    section "Running programs (RSS = memory use, kernel threads left out)"
+    ps -o pid,user,rss,stat,comm | awk 'NR == 1 || $3 != 0'
+
+    section "Errors and warnings in the system log (this boot)"
+    grep -iE 'error|fail|warn|timed? ?out|unable|cannot|denied|i/o' /var/log/messages | tail -n 50 | redact
+
+    section "System log (last 80 lines)"
+    tail -n 80 /var/log/messages | redact
+
+    section "Last app log (last 40 lines)"
+    tail -n 40 /dev/shm/application/application.log | redact
+} >"$TMP" 2>/dev/null
+
+mv "$TMP" "$OUT" || { echo "Could not save $OUT (is HOME full?)"; exit 1; }
+sync
+echo "Saved to HOME as systemReport.txt."
+echo ""
+echo "Connect the device to your PC with USB (or put its card in the PC) and attach the file to your GitHub issue."

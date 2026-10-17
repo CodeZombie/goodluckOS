@@ -12,7 +12,9 @@
 #include "imgui_impl_sdl2.h"
 #include "imgui_impl_sdlrenderer2.h"
 #include <algorithm>
+#include <climits>
 #include <csignal>
+#include <cstdint>
 #include <cstdio>
 #include <cstring>
 #include <ctime>
@@ -22,14 +24,15 @@
 #include <string>
 #include <unordered_map>
 #include <vector>
+#include <spawn.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
 #include <unistd.h>
 
+extern char** environ;
+
 namespace fs = std::filesystem;
 
-static const char* kHome          = "/home/player";
-static const char* kRetroArchCfg  = "/home/player/.config/retroarch/retroarch.cfg";
 static const char* kFont          = "/usr/share/fonts/NotoSans.ttf";
 static const char* kAudioIcon     = "/usr/share/icons/gallery-audio.png";
 static const char* kVideoIcon     = "/usr/share/icons/gallery-video.png";
@@ -48,6 +51,8 @@ constexpr Uint32 kRepeatDelayMs = 350;       // holding a direction repeats it a
 constexpr Uint32 kRepeatRateMs = 60;         // ...and then this often (like the launcher)
 constexpr int kStickPress = 16000, kStickRelease = 8000;
 constexpr size_t kMaxTextures = 12;          // 3 pages of the grid
+constexpr int kMaxImageSide = 4096;          // the largest texture the Mali-400 takes
+constexpr uintmax_t kMaxImageBytes = 64u << 20;
 
 static const ImU32 kYellow   = IM_COL32(255, 205, 60, 255);   // the launcher's selection colour
 static const ImU32 kTile     = IM_COL32(36, 36, 40, 255);     // the launcher's tile colour
@@ -70,19 +75,33 @@ struct Item {
 // ---------------------------------------------------------------------------------------------
 // Files
 
-// Value of "key = "value"" in retroarch.cfg, "~" expanded; empty when unset or "default".
-static std::string retroArchDir(const char* key) {
-    std::ifstream in(kRetroArchCfg);
+static std::string homeDir() {
+    const char* h = getenv("HOME");
+    return h && *h ? h : "/home/player";
+}
+
+// A folder as one canonical spelling: no "//", "/./", "a/../" or trailing "/", so it compares
+// equal to the parent_path() of the files in it
+static fs::path normalDir(const std::string& dir) {
+    fs::path p = fs::path(dir).lexically_normal();
+    if (p.has_parent_path() && !p.has_filename()) p = p.parent_path();
+    return p;
+}
+
+// Folder set as "key = "value"" in retroarch.cfg ("~" expanded like RetroArch does), else fallback
+static fs::path retroArchDir(const char* key, const char* fallback) {
+    std::ifstream in(homeDir() + "/.config/retroarch/retroarch.cfg");
     const std::string prefix = std::string(key) + " = \"";
+    std::string v;
     for (std::string line; std::getline(in, line);) {
         if (line.compare(0, prefix.size(), prefix) != 0) continue;
-        std::string v = line.substr(prefix.size());
+        v = line.substr(prefix.size());
         if (!v.empty() && v.back() == '"') v.pop_back();
-        if (v.empty() || v == "default") return "";
-        if (v[0] == '~') v = kHome + v.substr(1);
-        return v;
+        break;
     }
-    return "";
+    if (v.empty() || v == "default") v = fallback;
+    if (v[0] == '~') v = homeDir() + v.substr(1);
+    return normalDir(v);
 }
 
 static bool hasExtension(const fs::path& p, std::initializer_list<const char*> exts) {
@@ -93,6 +112,49 @@ static bool hasExtension(const fs::path& p, std::initializer_list<const char*> e
 }
 
 static bool isImageFile(const fs::path& p) { return hasExtension(p, {".png", ".jpg", ".jpeg", ".bmp", ".gif"}); }
+
+// Pixel size from the file's header, without decoding it, so an oversized image (a decompression
+// bomb, or just a huge photo copied over MTP) is never blown up in memory.
+static bool imageSize(const fs::path& p, int& w, int& h) {
+    std::ifstream f(p, std::ios::binary);
+    unsigned char b[32];
+    if (!f.read((char*)b, 26)) return false;
+    auto be16 = [](const unsigned char* x) { return x[0] << 8 | x[1]; };
+    auto be32 = [](const unsigned char* x) { return (int)((uint32_t)x[0] << 24 | x[1] << 16 | x[2] << 8 | x[3]); };
+    auto le16 = [](const unsigned char* x) { return x[0] | x[1] << 8; };
+    auto le32 = [](const unsigned char* x) { return (int32_t)(x[0] | x[1] << 8 | x[2] << 16 | (uint32_t)x[3] << 24); };
+    if (!memcmp(b, "\x89PNG\r\n\x1a\n", 8) && !memcmp(b + 12, "IHDR", 4)) {
+        w = be32(b + 16); h = be32(b + 20);
+    } else if (!memcmp(b, "GIF8", 4)) {
+        w = le16(b + 6); h = le16(b + 8);
+    } else if (b[0] == 'B' && b[1] == 'M') {
+        w = le32(b + 18); h = std::abs(le32(b + 22));   // negative: stored top-down
+    } else if (b[0] == 0xFF && b[1] == 0xD8) {          // JPEG: walk the segments to the frame header
+        f.seekg(2);
+        for (int segments = 0; segments < 1000 && f.read((char*)b, 4); ++segments) {
+            if (b[0] != 0xFF) return false;
+            const int marker = b[1], len = be16(b + 2);
+            if (marker >= 0xC0 && marker <= 0xCF && marker != 0xC4 && marker != 0xC8 && marker != 0xCC) {
+                if (!f.read((char*)b, 5)) return false;
+                h = be16(b + 1); w = be16(b + 3);
+                return w > 0 && h > 0;
+            }
+            if (len < 2) return false;
+            f.seekg(len - 2, std::ios::cur);
+        }
+        return false;
+    } else {
+        return false;
+    }
+    return w > 0 && h > 0;
+}
+
+static bool loadable(const fs::path& p) {
+    std::error_code ec;
+    const uintmax_t bytes = fs::file_size(p, ec);
+    int w = 0, h = 0;
+    return !ec && bytes <= kMaxImageBytes && imageSize(p, w, h) && w <= kMaxImageSide && h <= kMaxImageSide;
+}
 
 // Length of a WAV file (RetroArch's "wav" recording driver writes them, even into .mkv names).
 static bool wavSeconds(const fs::path& p, int& seconds) {
@@ -121,9 +183,9 @@ static bool wavSeconds(const fs::path& p, int& seconds) {
     std::error_code ec;
     const auto fileSize = fs::file_size(p, ec);
     // A recording that was cut short keeps the size it was created with (often 0)
-    if (!ec && (dataSize == 0 || dataStart + (std::streamoff)dataSize > (std::streamoff)fileSize))
-        dataSize = (uint32_t)(fileSize - dataStart);
-    seconds = (int)(dataSize / byteRate);
+    uint64_t bytes = dataSize;
+    if (!ec && (bytes == 0 || (uint64_t)dataStart + bytes > fileSize)) bytes = fileSize - (uint64_t)dataStart;
+    seconds = (int)std::min<uint64_t>(bytes / byteRate, INT_MAX);
     return true;
 }
 
@@ -141,26 +203,35 @@ static void describe(Item& it) {
                   " " + stem.substr(n - 6, 2) + ":" + stem.substr(n - 4, 2);
     } else {
         it.title = stem;
-        char buf[32];
-        strftime(buf, sizeof buf, "%Y-%m-%d %H:%M", localtime(&it.mtime));
+        char buf[32] = "";
+        struct tm t;
+        if (localtime_r(&it.mtime, &t)) strftime(buf, sizeof buf, "%Y-%m-%d %H:%M", &t);   // NULL past year 2^31
         it.when = buf;
     }
 }
 
-static std::vector<Item> scan(const std::string& dir, bool recordings) {
+// The folder and the folders right in it (RetroArch's one folder per game). Nothing deeper, so a
+// folder set to "~" or "/" can't walk the whole disk; no symlinks and nothing hidden.
+static std::vector<Item> scan(const fs::path& dir, bool recordings) {
     std::vector<Item> items;
     std::error_code ec;
-    if (dir.empty()) return items;
     for (fs::recursive_directory_iterator it(dir, fs::directory_options::skip_permission_denied, ec), end;
          !ec && it != end; it.increment(ec)) {
-        if (!it->is_regular_file(ec) || it->path().filename().string()[0] == '.') continue;
+        const bool hidden = it->path().filename().string()[0] == '.';
+        const fs::file_status st = it->symlink_status(ec);
+        if (ec) break;
+        if (fs::is_directory(st)) {
+            if (hidden || it.depth() >= 1) it.disable_recursion_pending();
+            continue;
+        }
+        if (!fs::is_regular_file(st) || hidden) continue;   // symlinks, devices, sockets...
         Item item;
         item.path = it->path();
         if (isImageFile(item.path)) item.kind = Kind::Image;
         else if (!recordings) continue;
         else item.kind = wavSeconds(item.path, item.seconds) ? Kind::Audio : Kind::Video;
-        struct stat st;
-        if (stat(item.path.c_str(), &st) == 0) item.mtime = st.st_mtime;
+        struct stat sb;
+        if (stat(item.path.c_str(), &sb) == 0) item.mtime = sb.st_mtime;
         describe(item);
         items.push_back(std::move(item));
     }
@@ -188,7 +259,7 @@ public:
             order.splice(order.begin(), order, it->second.second);
             return it->second.first;
         }
-        SDL_Texture* t = IMG_LoadTexture(renderer, key.c_str());
+        SDL_Texture* t = loadable(p) ? IMG_LoadTexture(renderer, key.c_str()) : nullptr;
         if (t) {
             // Set once, here: SDL's GL/GLES2 renderers bind the texture to change it without telling
             // their own state cache, so changing it between draws makes later draws use the wrong
@@ -236,11 +307,11 @@ public:
     ~Player() { stop(); }
     bool start(const fs::path& p) {
         stop();
-        pid = fork();
-        if (pid == 0) {
-            execlp("aplay", "aplay", "-q", p.c_str(), (char*)nullptr);
-            _exit(127);
-        }
+        failed = false;
+        // posix_spawn, not fork()+exec: SDL runs threads, and only async-signal-safe calls may
+        // follow fork() there. "--": a file name can't turn into an aplay option.
+        char* argv[] = {(char*)"aplay", (char*)"-q", (char*)"--", (char*)p.c_str(), nullptr};
+        if (posix_spawnp(&pid, "aplay", nullptr, nullptr, argv, environ) != 0) { pid = -1; failed = true; }
         return pid > 0;
     }
     void stop() {
@@ -250,11 +321,16 @@ public:
         }
         pid = -1;
     }
-    // true while it plays; reaps aplay when it is done
+    // true while it plays; reaps aplay when it is done, and remembers whether it could play
     bool playing() {
-        if (pid > 0 && waitpid(pid, nullptr, WNOHANG) == pid) pid = -1;
+        int status;
+        if (pid > 0 && waitpid(pid, &status, WNOHANG) == pid) {
+            pid = -1;
+            failed = !WIFEXITED(status) || WEXITSTATUS(status) != 0;
+        }
         return pid > 0;
     }
+    bool failed = false;
 private:
     pid_t pid = -1;
 };
@@ -347,14 +423,6 @@ static std::string duration(int seconds) {
     return buf;
 }
 
-static const char* kCat[] = {   // a cat batting a ball of yarn
-    "    /\\_/\\",
-    "   ( o.o )              .-~~-.",
-    "    > ^ <             .' @@@@ '.",
-    "   /     \\~~~~~~~~~~~( @@@@@@@@ )",
-    "  (_|   |_)           '. @@@@ .'",
-    "                        '-..-'",
-};
 
 // ---------------------------------------------------------------------------------------------
 
@@ -362,7 +430,8 @@ enum class Tab { Screenshots = 0, Recordings = 1 };
 enum class View { Tabs, Grid, Full, Confirm };
 
 struct Gallery {
-    std::string dirs[2];
+    fs::path dirs[2];
+    std::string notice;          // shown in the footer until the next button
     std::vector<Item> items;
     Tab tab = Tab::Screenshots;
     View view = View::Tabs;
@@ -401,8 +470,10 @@ int main(int, char**) {
     ImGuiIO& io = ImGui::GetIO();
     io.IniFilename = nullptr;   // nothing to remember, and no imgui.ini in HOME
     // No ImGui navigation: all input goes through act(), so the dialog can't get two answers at once
-    uiFont = io.Fonts->AddFontFromFileTTF(kFont, kTextSize);
-    monoFont = io.Fonts->AddFontDefault();   // ProggyClean: monospaced, for the cat
+    ImFontConfig fontCfg;
+    fontCfg.Flags |= ImFontFlags_NoLoadError;   // ImGui asserts on a missing font otherwise
+    uiFont = io.Fonts->AddFontFromFileTTF(kFont, kTextSize, &fontCfg);
+    monoFont = io.Fonts->AddFontDefault();   // ProggyClean, for the dialog (like are-you-sure)
     if (!uiFont) uiFont = monoFont;
     ImGui_ImplSDL2_InitForSDLRenderer(window, renderer);
     ImGui_ImplSDLRenderer2_Init(renderer);
@@ -413,10 +484,8 @@ int main(int, char**) {
     Player player;
 
     Gallery g;
-    g.dirs[0] = retroArchDir("screenshot_directory");
-    if (g.dirs[0].empty()) g.dirs[0] = std::string(kHome) + "/.config/retroarch/screenshots";
-    g.dirs[1] = retroArchDir("recording_output_directory");
-    if (g.dirs[1].empty()) g.dirs[1] = std::string(kHome) + "/.config/retroarch/records";
+    g.dirs[0] = retroArchDir("screenshot_directory", "~/.config/retroarch/screenshots");
+    g.dirs[1] = retroArchDir("recording_output_directory", "~/.config/retroarch/records");
     g.load();
 
     Action held = Action::None, stickDir = Action::None;
@@ -434,12 +503,19 @@ int main(int, char**) {
 
     auto deleteSelected = [&] {
         const fs::path p = g.items[g.sel].path;
-        const fs::path root = g.dirs[(int)g.tab];
-        std::error_code ec;
+        const fs::path& root = g.dirs[(int)g.tab];
+        std::error_code ec, ec2;
+        if (!fs::remove(p, ec) && fs::exists(fs::symlink_status(p, ec2))) {   // read-only card, ...
+            g.notice = "Couldn't delete this file";
+            g.view = View::Grid;
+            return;
+        }
         textures.drop(p);
-        fs::remove(p, ec);
-        // RetroArch keeps screenshots in a folder per game: drop the folder once it is empty
-        if (p.parent_path() != fs::path(root) && fs::is_empty(p.parent_path(), ec)) fs::remove(p.parent_path(), ec);
+        // RetroArch keeps screenshots in a folder per game: drop it once it is empty. Only ever
+        // a folder right inside the screenshot folder, never that folder itself.
+        const fs::path folder = p.parent_path();
+        if (folder != root && folder.parent_path() == root && fs::is_empty(folder, ec)) fs::remove(folder, ec);
+        sync();   // HOME is FAT: get it onto the card before someone holds the power button
         g.items.erase(g.items.begin() + g.sel);
         g.sel = std::min(g.sel, (int)g.items.size() - 1);
         if (g.sel < 0) g.sel = 0;
@@ -449,6 +525,7 @@ int main(int, char**) {
 
     auto act = [&](Action a) {
         const int n = (int)g.items.size();
+        g.notice.clear();
         switch (g.view) {
             case View::Tabs:
                 if (a == Action::Left || a == Action::Right) {
@@ -490,9 +567,10 @@ int main(int, char**) {
 
     while (running) {
         // Wait for input, a held direction's next repeat, or aplay finishing
-        int timeout = framesToDraw > 0 ? 0 : 60000;
+        int timeout = 60000;
         if (held != Action::None) timeout = std::max(0, (int)(nextRepeat - SDL_GetTicks()));
         if (g.view == View::Full && player.playing()) timeout = std::min(timeout, 250);
+        if (framesToDraw > 0) timeout = 0;   // a change waiting to be drawn goes first
 
         SDL_Event ev;
         if (waitEvent(&ev, timeout)) {
@@ -529,8 +607,10 @@ int main(int, char**) {
                             }
                         }
                         break;
-                    case SDL_CONTROLLERDEVICEADDED:
-                        if (SDL_IsGameController(ev.cdevice.which)) SDL_GameControllerOpen(ev.cdevice.which);
+                    case SDL_CONTROLLERDEVICEADDED:   // also sent for the ones there at start
+                        if (SDL_IsGameController(ev.cdevice.which) &&
+                            !SDL_GameControllerFromInstanceID(SDL_JoystickGetDeviceInstanceID(ev.cdevice.which)))
+                            SDL_GameControllerOpen(ev.cdevice.which);
                         break;
                 }
                 if (a != Action::None) {
@@ -607,6 +687,7 @@ int main(int, char**) {
                 centeredText(d, uiFont, kTextSize, kW / 2, 272, it.when, kTextDim);
                 std::string status;
                 if (it.kind == Kind::Video) status = "This recording can't be played here";
+                else if (player.failed) status = "This recording can't be played";
                 else status = (player.playing() ? "Playing" : "Finished") +
                               (it.seconds >= 0 ? std::string("  ") + duration(it.seconds) : std::string());
                 centeredText(d, uiFont, kTextSize, kW / 2, 320, status, kText);
@@ -622,18 +703,25 @@ int main(int, char**) {
                 d->AddRectFilled(a, b, i == (int)g.tab ? kTabOn : kTabOff);
                 centeredText(d, uiFont, kTextSize, (a.x + b.x) / 2, (kTabH - kTextSize) / 2 - 1, names[i], kText);
                 if (g.view == View::Tabs && i == (int)g.tab)
-                    d->AddRect(a, b, kYellow, 0, 0, kBorder * 2);   // half falls off the screen edge
+                    d->AddRect(ImVec2(a.x + kBorder / 2, a.y + kBorder / 2), ImVec2(b.x - kBorder / 2, b.y - kBorder / 2),
+                               kYellow, 0, 0, kBorder);
             }
 
             if (n == 0) {
-                const float lineH = 13.0f * 2;   // ProggyClean at twice its size stays crisp
-                const size_t lines = sizeof kCat / sizeof kCat[0];
-                float artW = 0;
-                for (size_t i = 0; i < lines; ++i) artW = std::max(artW, textSize(monoFont, lineH, kCat[i]).x);
-                const float top = std::floor(kGridTop + (kH - kGridTop - lines * lineH - 60) / 2);
-                for (size_t i = 0; i < lines; ++i)
-                    d->AddText(monoFont, lineH, ImVec2(std::floor((kW - artW) / 2), top + i * lineH), kText, kCat[i]);
-                centeredText(d, uiFont, kTextSize, kW / 2, top + lines * lineH + 30, "Nothing to see here", kTextDim);
+                // A cat batting a ball of yarn: ears over a face, centred line by line (both symmetric),
+                // the yarn in the launcher's yellow
+                const float big = 60, cy = kGridTop + (kH - kGridTop) / 2 - 52;
+                const char* ears = "/\\_/\\";
+                const char* face = "( \u2022\u03C9\u2022 )";   // ( •ω• )
+                const char* thread = "  ~ ";
+                const char* yarn = "@";
+                const float faceW = textSize(uiFont, big, face).x, threadW = textSize(uiFont, big, thread).x;
+                const float x = std::floor((kW - (faceW + threadW + textSize(uiFont, big, yarn).x)) / 2);
+                centeredText(d, uiFont, big, x + faceW / 2, cy - big * 0.72f, ears, kText);
+                d->AddText(uiFont, big, ImVec2(x, cy), kText, face);
+                d->AddText(uiFont, big, ImVec2(x + faceW, cy), kTextDim, thread);
+                d->AddText(uiFont, big, ImVec2(x + faceW + threadW, cy), kYellow, yarn);
+                centeredText(d, uiFont, kTextSize, kW / 2, cy + big * 1.55f, "Nothing to see here", kTextDim);
             } else {
                 for (int r = g.firstRow; r < g.firstRow + 2 && r < g.rows(); ++r) {
                     for (int c = 0; c < 2; ++c) {
@@ -668,7 +756,8 @@ int main(int, char**) {
                 const std::string count = std::to_string(g.sel + 1) + " / " + std::to_string(n);
                 const float countW = textSize(uiFont, kTextSize, count).x;
                 const Item& it = g.items[g.sel];
-                const std::string label = g.view == View::Grid ? it.title + "   " + it.when
+                const std::string label = !g.notice.empty() ? g.notice
+                                        : g.view == View::Grid ? it.title + "   " + it.when
                                         : std::to_string(n) + (g.tab == Tab::Screenshots ? " screenshots" : " recordings");
                 d->AddText(uiFont, kTextSize, ImVec2(kPad, fy), kText, fitText(label, kW - 3 * kPad - countW).c_str());
                 d->AddText(uiFont, kTextSize, ImVec2(kW - kPad - countW, fy), kTextDim, count.c_str());

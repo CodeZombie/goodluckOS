@@ -65,6 +65,10 @@
     };
 };
 
+&axp22x {
+    x-powers,drive-vbus-en;	/* registers reg_drivevbus; without it usbphy defers forever and musb never probes */
+};
+
 &usbphy {
     pinctrl-names = "default";
     pinctrl-0 = <&usb0_id_det_pin>;

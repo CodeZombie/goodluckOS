@@ -10,6 +10,7 @@
 
 const char* ALSA_MIXER_NAME = "Headphone";
 const char* ALSA_CARD = "GA36mbAudio";
+const char* HUD_CONF = "/home/player/.config/gallium_hud.conf";
 
 int get_brightness() {
     return 5;
@@ -111,6 +112,25 @@ void set_alsa_mute(bool mute) {
 
 
 
+// The overlay over every app, read by /etc/profile.d/gallium_hud.sh when the next app starts
+bool get_hud_setting(const char* key, bool fallback) {
+    std::ifstream file(HUD_CONF);
+    std::string line, prefix = std::string(key) + "=";
+    while (std::getline(file, line)) {
+        if (line.compare(0, prefix.size(), prefix) == 0) {
+            return line.substr(prefix.size()) == "true";
+        }
+    }
+    return fallback;
+}
+void set_hud_settings(bool battery, bool feedback) {
+    std::ofstream file(HUD_CONF);
+    if (file.is_open()) {
+        file << "HUD_STATUS_BATTERY=" << (battery ? "true" : "false") << "\n";
+        file << "HUD_FEEDBACK=" << (feedback ? "true" : "false") << "\n";
+    }
+}
+
 void section_headear(const char* text) {
     float windowWidth = ImGui::GetWindowSize().x;
     float textWidth = ImGui::CalcTextSize(text).x;
@@ -156,6 +176,8 @@ int main(int argc, char* argv[]) {
     int display_brightness = get_brightness();
     int current_volume = get_alsa_volume();
     bool current_mute = get_alsa_mute();
+    bool show_battery = get_hud_setting("HUD_STATUS_BATTERY", false);
+    bool show_feedback = get_hud_setting("HUD_FEEDBACK", true);
 
 
     bool running = true;
@@ -203,6 +225,14 @@ int main(int argc, char* argv[]) {
 
         if (ImGui::Checkbox("Global Mute", &current_mute)) {
             set_alsa_mute(current_mute);
+        }
+
+        section_headear("Overlay");
+        if (ImGui::Checkbox("Show battery level", &show_battery)) {
+            set_hud_settings(show_battery, show_feedback);
+        }
+        if (ImGui::Checkbox("Show system feedback", &show_feedback)) {
+            set_hud_settings(show_battery, show_feedback);
         }
 
         if (ImGui::Button("System Settings")) {

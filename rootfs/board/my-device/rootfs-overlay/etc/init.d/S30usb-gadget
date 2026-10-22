@@ -3,18 +3,58 @@
 G=/sys/kernel/config/usb_gadget/g1
 LOG=/tmp/usb-gadget.log
 
-# Rebuild the gadget with the serial console alone (MTP did not work)
+# Next to the serial console the gadget offers MTP (default) or a USB network (NCM),
+# chosen with usb-mode.sh. The A23/A33 OTG controller has 5 IN endpoints and ACM, MTP and
+# NCM need 2 each, so MTP and the network cannot be offered together.
+MODE=$(cat /etc/player-flags/usb-mode 2>/dev/null)
+[ "$MODE" = network ] || MODE=mtp
+
+# Rebuild the gadget with the serial console alone (MTP or the network did not work)
 serial_only() {
     echo "$1: serial only" >> $LOG
     [ -f /run/umtprd.pid ] && kill "$(cat /run/umtprd.pid)" 2>/dev/null && rm -f /run/umtprd.pid
     echo "" > $G/UDC 2>/dev/null
-    rm -f $G/configs/c.1/ffs.mtp
+    rm -f $G/configs/c.1/ffs.mtp $G/configs/c.1/ncm.usb0 $G/os_desc/c.1
     ls /sys/class/udc > $G/UDC
+}
+
+stop_daemons() {
+    for pidfile in /run/umtprd.pid /run/udhcpd.pid; do
+        [ -f $pidfile ] || continue
+        pid=$(cat $pidfile)
+        kill "$pid" 2>/dev/null
+        # FunctionFS can only be unmounted once umtprd has closed it
+        i=0
+        while kill -0 "$pid" 2>/dev/null && [ $i -lt 30 ]; do sleep 0.1; i=$((i + 1)); done
+        rm -f $pidfile
+    done
+}
+
+# Unbind the gadget; returns 1 when the unbind did not finish. The unbind can hang
+# (e.g. a half-started MTP function), so it gets 3s.
+unbind() {
+    ( echo "" > $G/UDC ) &
+    i=0
+    while kill -0 $! 2>/dev/null; do
+        [ $i -ge 30 ] && return 1
+        sleep 0.1; i=$((i + 1))
+    done
+}
+
+# Stop umtprd/udhcpd and remove the MTP and network functions of an unbound gadget.
+# The serial function stays: removing it waits until ttyGS0 is closed, and getty keeps it open.
+remove_mode_functions() {
+    stop_daemons
+    rm -f $G/configs/c.1/ffs.mtp $G/configs/c.1/ncm.usb0 $G/os_desc/c.1
+    echo 0 > $G/os_desc/use
+    umount /dev/ffs-mtp 2>/dev/null
+    rmdir $G/functions/ffs.mtp 2>/dev/null
+    rmdir $G/functions/ncm.usb0 2>/dev/null
 }
 
 case "$1" in
   start)
-    echo "Starting USB Gadget (serial + MTP)..."
+    echo "Starting USB Gadget (serial + $MODE)..."
 
     mount -t configfs none /sys/kernel/config 2>/dev/null
 
@@ -41,15 +81,29 @@ case "$1" in
 
     # Create the configuration
     mkdir -p configs/c.1/strings/0x409
-    echo "Serial + MTP" > configs/c.1/strings/0x409/configuration
+    if [ "$MODE" = network ]; then
+        echo "Serial + Network" > configs/c.1/strings/0x409/configuration
+    else
+        echo "Serial + MTP" > configs/c.1/strings/0x409/configuration
+    fi
     echo 250 > configs/c.1/MaxPower
 
     # Serial console (ttyGS0)
     mkdir -p functions/acm.usb0
     ln -s functions/acm.usb0 configs/c.1/
 
+    if [ "$MODE" = network ]; then
+        # Network: the PC gets a USB Ethernet interface (CDC NCM)
+        mkdir -p functions/ncm.usb0
+        ln -s functions/ncm.usb0 configs/c.1/
+        # Windows binds its in-box NCM driver (UsbNcm) only to the WINNCM compatible ID
+        echo 1 > os_desc/use
+        echo 0xcd > os_desc/b_vendor_code
+        echo MSFT100 > os_desc/qw_sign
+        echo WINNCM > functions/ncm.usb0/os_desc/interface.ncm/compatible_id
+        ln -s configs/c.1 os_desc/
     # MTP: HOME shows up on the PC as a folder. umtprd answers on FunctionFS.
-    if mkdir -p functions/ffs.mtp 2>/dev/null; then
+    elif mkdir -p functions/ffs.mtp 2>/dev/null; then
         ln -s functions/ffs.mtp configs/c.1/
         mkdir -p /dev/ffs-mtp
         mount -t functionfs mtp /dev/ffs-mtp
@@ -67,6 +121,12 @@ case "$1" in
     UDC_NAME=$(ls /sys/class/udc)
     if ! echo "$UDC_NAME" > UDC 2>>$LOG; then
         serial_only "bind failed"
+    elif [ -L configs/c.1/ncm.usb0 ]; then
+        # The console is 192.168.36.1; udhcpd (/etc/udhcpd.conf) gives the PC 192.168.36.2
+        # and dropbear (S50dropbear) answers SSH
+        ip addr add 192.168.36.1/24 dev usb0
+        ip link set usb0 up
+        start-stop-daemon -S -q -b -m -d / -p /run/udhcpd.pid -x /usr/sbin/udhcpd -- -f
     elif [ -L configs/c.1/ffs.mtp ]; then
         # The bind can succeed and the PC still not enumerate the device. With a cable in,
         # a working gadget reaches "configured" in a second or two; give it 15s.
@@ -77,42 +137,44 @@ case "$1" in
             if [ "$(cat /sys/class/power_supply/axp20x-usb/online 2>/dev/null)" = "1" ] && [ "$state" != "configured" ]; then
                 serial_only "not enumerated"
             fi
-        ) &
+        ) >> $LOG 2>&1 &
     fi
     ;;
   stop)
     echo "Stopping USB Gadget..."
 
-    [ -f /run/umtprd.pid ] && kill "$(cat /run/umtprd.pid)" 2>/dev/null && rm -f /run/umtprd.pid
-
-    # With no USB cable the unbind below never returns, which hung every shutdown and reboot
+    # With no USB cable the unbind hung on some units, which hung every shutdown and reboot
     # (rcK stops here). There is nothing to tear down before the power goes off anyway.
     if [ "$(cat /sys/class/power_supply/axp20x-usb/online 2>/dev/null)" != "1" ]; then
+        stop_daemons
         exit 0
     fi
 
-    # Unbind from UDC. This can also hang with the cable in (e.g. a half-started MTP function),
-    # so give it 3s and let the shutdown go on without the teardown.
-    ( echo "" > $G/UDC ) &
-    i=0
-    while kill -0 $! 2>/dev/null; do
-        [ $i -ge 30 ] && exit 0
-        sleep 0.1; i=$((i + 1))
-    done
+    unbind || exit 0
+    remove_mode_functions
 
     # Remove symlinks
-    rm -f $G/configs/c.1/acm.usb0 $G/configs/c.1/ffs.mtp
-    umount /dev/ffs-mtp 2>/dev/null
+    rm -f $G/configs/c.1/acm.usb0
 
     # Remove directories in reverse order of creation
     rmdir $G/configs/c.1/strings/0x409
     rmdir $G/configs/c.1
     rmdir $G/functions/acm.usb0
-    rmdir $G/functions/ffs.mtp 2>/dev/null
     rmdir $G/strings/0x409
     rmdir $G
     ;;
+  restart)
+    # usb-mode.sh: rebind the gadget with the functions of the new mode, with or without a cable
+    echo "Restarting USB Gadget..."
+    if ! unbind; then
+        echo "restart: unbind did not finish, the new mode applies after a reboot" | tee -a $LOG
+        exit 1
+    fi
+    remove_mode_functions
+    rm -f $G/configs/c.1/acm.usb0
+    "$0" start
+    ;;
   *)
-    echo "Usage: $0 {start|stop}"
+    echo "Usage: $0 {start|stop|restart}"
     exit 1
 esac

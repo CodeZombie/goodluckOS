@@ -1,4 +1,8 @@
 ## [UNRELEASED]
+### Added
+- USB networking: SSH, SCP and SFTP over the USB cable, switched on with `usb-mode.sh network`
+### Fixed
+- Shutdown and reboot no longer hang with the USB cable plugged in
 
 ## [0.1.0]  - 2026-10-10
 ### Added

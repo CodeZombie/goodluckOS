@@ -4,6 +4,7 @@ CONTROL=Headphone
 STEP=5
 
 cur=$(amixer -c "$CARD" sget "$CONTROL" | grep -m1 -oE '[0-9]+%' | tr -d '%')
+cur=$(( (cur + 2) / 5 * 5 ))   # 64 hardware levels: back to the multiple of 5 that was set
 
 case "$1" in
     up)   new=$((cur + STEP)); [ "$new" -gt 100 ] && new=100 ;;

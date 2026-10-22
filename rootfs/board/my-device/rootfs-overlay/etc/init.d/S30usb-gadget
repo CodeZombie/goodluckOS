@@ -150,18 +150,11 @@ case "$1" in
         exit 0
     fi
 
+    # Only unbind, so the PC sees the console go. Removing the gadget hung the shutdown with
+    # the cable in: removing the serial function waits until ttyGS0 is closed, and rcK runs
+    # while getty or a logged-in shell still has it open.
     unbind || exit 0
-    remove_mode_functions
-
-    # Remove symlinks
-    rm -f $G/configs/c.1/acm.usb0
-
-    # Remove directories in reverse order of creation
-    rmdir $G/configs/c.1/strings/0x409
-    rmdir $G/configs/c.1
-    rmdir $G/functions/acm.usb0
-    rmdir $G/strings/0x409
-    rmdir $G
+    stop_daemons
     ;;
   restart)
     # usb-mode.sh: rebind the gadget with the functions of the new mode, with or without a cable

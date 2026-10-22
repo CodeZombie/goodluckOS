@@ -12,6 +12,8 @@ esac
 
 if [ "$new" -eq 0 ]; then
     amixer -q -c "$CARD" sset "$CONTROL" 0% mute
+    /usr/local/bin/osd-notify.sh Volume Muted
 else
     amixer -q -c "$CARD" sset "$CONTROL" "${new}%" unmute
+    /usr/local/bin/osd-notify.sh Volume "$new%"
 fi

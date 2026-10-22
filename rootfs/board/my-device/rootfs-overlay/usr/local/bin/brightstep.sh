@@ -10,3 +10,4 @@ case "$1" in
 esac
 
 echo "$new" > "$BL/brightness"
+/usr/local/bin/osd-notify.sh Brightness "$((new * 100 / max))%"

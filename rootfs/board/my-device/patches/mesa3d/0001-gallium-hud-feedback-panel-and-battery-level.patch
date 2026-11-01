@@ -1,0 +1,383 @@
+From: Maicon Alves <alvesmaiconn@gmail.com>
+Subject: [PATCH] gallium/hud: goodluckOS feedback panel and battery level
+
+Draws over any app, even with the graphs hidden:
+- a panel with a title and a text that osd-notify.sh writes to
+  /dev/shm/hud-osd, for 1.5 s (GALLIUM_HUD_FEEDBACK=false turns it off);
+- the battery level and state in the top right corner, when
+  GALLIUM_HUD_STATUS lists "battery".
+Text can be drawn 1.5x, without its background quad.
+
+---
+--- a/src/gallium/auxiliary/hud/hud_context.c
++++ b/src/gallium/auxiliary/hud/hud_context.c
+@@ -68,6 +68,9 @@
+ #include "util/u_upload_mgr.h"
+ #include "tgsi/tgsi_text.h"
+ #include "tgsi/tgsi_dump.h"
++#include "util/os_time.h"
++#include <dirent.h>
++#include <sys/stat.h>
+ 
+ #define HUD_DEFAULT_VISIBILITY true
+ #define HUD_DEFAULT_SCALE 1
+@@ -79,7 +82,48 @@
+ static int hud_scale = HUD_DEFAULT_SCALE;
+ static int hud_rotate = HUD_DEFAULT_ROTATION;
+ static float hud_opacity = HUD_DEFAULT_OPACITY / 100.0f;
++
++/* goodluckOS: a feedback panel and the battery level, drawn over any app even
++ * with the graphs hidden. osd-notify.sh writes the panel's title and text to
++ * /dev/shm/hud-osd (GALLIUM_HUD_FEEDBACK=false turns it off), and
++ * GALLIUM_HUD_STATUS=battery shows the battery in the top right corner. */
++#define OSD_FILE "/dev/shm/hud-osd"
++#define OSD_MS 1500
++#define OSD_PAD 12
++#define TEXT_SCALE 1.5f
++
++static float text_scale = 1;
++static bool text_background = true;
++
++static struct {
++   int enabled;
++   bool visible;
++   struct timespec mtime;
++   int64_t next_ms, until_ms;
++   char title[64], text[64];
++} osd = { .enabled = -1 };
++
++static struct {
++   int enabled;
++   int64_t next_ms;
++   char dir[300];
++   int percent;
++   bool charging, full;
++} battery = { .enabled = -1, .percent = -1 };
++
++#define MAX_QUADS 16
++static struct {
++   unsigned x1, y1, x2, y2;
++   float color[4];
++} quads[MAX_QUADS];
++static unsigned num_quads;
+ 
++static const float kWhite[] = {1, 1, 1, 1};
++static const float kYellow[] = {1, 205 / 255.0, 60 / 255.0, 1};
++static const float kRed[] = {230 / 255.0, 60 / 255.0, 50 / 255.0, 1};
++static const float kGreen[] = {80 / 255.0, 200 / 255.0, 90 / 255.0, 1};
++static const float kShade[] = {12 / 255.0, 12 / 255.0, 14 / 255.0, 0.5};
++
+ #if DETECT_OS_POSIX
+ static void
+ signal_visible_handler(int sig, siginfo_t *siginfo, void *context)
+@@ -169,6 +213,8 @@
+    char *s = buf;
+    float *vertices = hud->text.vertices + hud->text.num_vertices*4;
+    unsigned num = 0;
++   unsigned gw = hud->font.glyph_width * text_scale;
++   unsigned gh = hud->font.glyph_height * text_scale;
+ 
+    va_list ap;
+    va_start(ap, str);
+@@ -178,23 +224,24 @@
+    if (!*s)
+       return;
+ 
+-   hud_draw_background_quad(hud,
+-                            x, y,
+-                            x + strlen(buf)*hud->font.glyph_width,
+-                            y + hud->font.glyph_height);
++   if (text_background)
++      hud_draw_background_quad(hud,
++                               x, y,
++                               x + strlen(buf)*gw,
++                               y + gh);
+ 
+    while (*s) {
+       unsigned x1 = x;
+       unsigned y1 = y;
+-      unsigned x2 = x + hud->font.glyph_width;
+-      unsigned y2 = y + hud->font.glyph_height;
++      unsigned x2 = x + gw;
++      unsigned y2 = y + gh;
+       unsigned tx1 = (*s % 16) * hud->font.glyph_width;
+       unsigned ty1 = (*s / 16) * hud->font.glyph_height;
+       unsigned tx2 = tx1 + hud->font.glyph_width;
+       unsigned ty2 = ty1 + hud->font.glyph_height;
+ 
+       if (*s == ' ') {
+-         x += hud->font.glyph_width;
++         x += gw;
+          s++;
+          continue;
+       }
+@@ -221,7 +268,7 @@
+       vertices[num++] = (float) tx2;
+       vertices[num++] = (float) ty1;
+ 
+-      x += hud->font.glyph_width;
++      x += gw;
+       s++;
+    }
+ 
+@@ -478,8 +525,200 @@
+    v->num_vertices = 0;
+    v->max_num_vertices = num_vertices;
+    v->buffer_size = stride * num_vertices;
++}
++
++static void
++hud_quad(unsigned x, unsigned y, unsigned w, unsigned h, const float *color)
++{
++   if (num_quads == MAX_QUADS)
++      return;
++   quads[num_quads].x1 = x;
++   quads[num_quads].y1 = y;
++   quads[num_quads].x2 = x + w;
++   quads[num_quads].y2 = y + h;
++   memcpy(quads[num_quads].color, color, sizeof(quads[0].color));
++   num_quads++;
+ }
+ 
++static unsigned
++hud_text_width(struct hud_context *hud, const char *str)
++{
++   return strlen(str) * (unsigned)(hud->font.glyph_width * text_scale);
++}
++
++static bool
++read_line(const char *path, char *buf, size_t size)
++{
++   FILE *f = fopen(path, "r");
++   bool ok;
++
++   if (!f)
++      return false;
++   ok = fgets(buf, size, f) != NULL;
++   fclose(f);
++   if (ok)
++      buf[strcspn(buf, "\n")] = 0;
++   return ok;
++}
++
++/* checked every 100 ms; a panel written before the app started isn't shown */
++static void
++hud_osd_update(int64_t now)
++{
++   struct stat st;
++   FILE *f;
++
++   if (osd.enabled < 0) {
++      const char *env = getenv("GALLIUM_HUD_FEEDBACK");
++      osd.enabled = !env || strcmp(env, "false");
++      if (stat(OSD_FILE, &st) == 0)
++         osd.mtime = st.st_mtim;
++   }
++   if (osd.enabled && now >= osd.next_ms) {
++      osd.next_ms = now + 100;
++      if (stat(OSD_FILE, &st) == 0 &&
++          (st.st_mtim.tv_sec != osd.mtime.tv_sec || st.st_mtim.tv_nsec != osd.mtime.tv_nsec) &&
++          (f = fopen(OSD_FILE, "r"))) {
++         osd.mtime = st.st_mtim;
++         if (!fgets(osd.title, sizeof(osd.title), f))
++            osd.title[0] = 0;
++         if (!fgets(osd.text, sizeof(osd.text), f))
++            osd.text[0] = 0;
++         fclose(f);
++         osd.title[strcspn(osd.title, "\n")] = 0;
++         osd.text[strcspn(osd.text, "\n")] = 0;
++         osd.until_ms = now + OSD_MS;
++      }
++   }
++   osd.visible = now < osd.until_ms;
++}
++
++/* the first power supply of type Battery, read every 5 s */
++static void
++hud_battery_update(int64_t now)
++{
++   char buf[32], path[320];
++
++   if (battery.enabled < 0) {
++      const char *env = getenv("GALLIUM_HUD_STATUS");
++      battery.enabled = env && strstr(env, "battery");
++   }
++   if (!battery.enabled || now < battery.next_ms)
++      return;
++   battery.next_ms = now + 5000;
++
++   if (!battery.dir[0]) {
++      DIR *dir = opendir("/sys/class/power_supply");
++      struct dirent *e;
++
++      while (dir && (e = readdir(dir))) {
++         snprintf(path, sizeof(path), "/sys/class/power_supply/%s/type", e->d_name);
++         if (read_line(path, buf, sizeof(buf)) && !strcmp(buf, "Battery")) {
++            snprintf(battery.dir, sizeof(battery.dir), "/sys/class/power_supply/%s", e->d_name);
++            break;
++         }
++      }
++      if (dir)
++         closedir(dir);
++      if (!battery.dir[0]) {
++         battery.enabled = 0;
++         return;
++      }
++   }
++   snprintf(path, sizeof(path), "%s/capacity", battery.dir);
++   battery.percent = read_line(path, buf, sizeof(buf)) ? atoi(buf) : -1;
++   snprintf(path, sizeof(path), "%s/status", battery.dir);
++   if (read_line(path, buf, sizeof(buf))) {
++      battery.charging = !strcmp(buf, "Charging");
++      battery.full = !strcmp(buf, "Full");
++   }
++}
++
++/* the battery in the top right corner; returns its bottom */
++static unsigned
++hud_battery_accumulate(struct hud_context *hud)
++{
++   char text[16] = "??";
++   unsigned th = hud->font.glyph_height * text_scale;
++   unsigned h = MAX2(th, 12) + 8, x, y = 6;
++   const float *fill = battery.full || (battery.charging && battery.percent >= 100) ? kGreen :
++                       battery.charging ? kYellow : battery.percent <= 10 ? kRed : kWhite;
++
++   if (battery.percent >= 0)
++      snprintf(text, sizeof(text), "%d%%", battery.percent);
++   x = hud->fb_width - 8 - (8 + 30 + hud_text_width(hud, text) + 8);
++   hud_quad(x, y, 8 + 30 + hud_text_width(hud, text) + 8, h, kShade);
++   hud_draw_string(hud, x + 8 + 30, y + (h - th) / 2, "%s", text);
++   x += 8;
++   y += (h - 12) / 2;
++   hud_quad(x, y, 22, 1, kWhite);
++   hud_quad(x, y + 11, 22, 1, kWhite);
++   hud_quad(x, y, 1, 12, kWhite);
++   hud_quad(x + 21, y, 1, 12, kWhite);
++   hud_quad(x + 22, y + 3, 2, 6, kWhite);
++   if (battery.percent > 0)
++      hud_quad(x + 2, y + 2, MAX2(18 * MIN2(battery.percent, 100) / 100, 3), 8, fill);
++   return 6 + h;
++}
++
++/* the panel, centred: the title in bold over the text */
++static void
++hud_osd_accumulate(struct hud_context *hud, unsigned y)
++{
++   unsigned th = hud->font.glyph_height * text_scale;
++   unsigned tw = hud_text_width(hud, osd.title), vw = hud_text_width(hud, osd.text);
++   unsigned w = MIN2(MAX2(tw, vw) + 2 * OSD_PAD, hud->fb_width);
++   unsigned x = (hud->fb_width - w) / 2;
++
++   hud_quad(x, y, w, 2 * th + 6 + 2 * OSD_PAD, kShade);
++   hud_draw_string(hud, x + (w - MIN2(tw, w)) / 2, y + OSD_PAD, "%s", osd.title);
++   hud_draw_string(hud, x + (w - MIN2(tw, w)) / 2 + 1, y + OSD_PAD, "%s", osd.title);
++   hud_draw_string(hud, x + (w - MIN2(vw, w)) / 2, y + OSD_PAD + th + 6, "%s", osd.text);
++}
++
++static void
++hud_goodluck_accumulate(struct hud_context *hud)
++{
++   int64_t now = os_time_get_nano() / 1000000;
++   unsigned y = 24;
++
++   num_quads = 0;
++   hud_osd_update(now);
++   hud_battery_update(now);
++   if (!hud->fb_width)
++      return;
++
++   text_scale = TEXT_SCALE;
++   text_background = false;
++   if (battery.enabled)
++      y = hud_battery_accumulate(hud) + 8;
++   if (osd.visible)
++      hud_osd_accumulate(hud, y);
++   text_scale = 1;
++   text_background = true;
++}
++
++/* one draw per run of quads of the same color */
++static void
++hud_draw_quads(struct hud_context *hud)
++{
++   float buffer[MAX_QUADS * 8];
++
++   for (unsigned i = 0, j; i < num_quads; i = j) {
++      unsigned n = 0;
++
++      for (j = i; j < num_quads && !memcmp(quads[j].color, quads[i].color, sizeof(quads[i].color)); j++) {
++         float v[] = {
++            quads[j].x1, quads[j].y1, quads[j].x1, quads[j].y2,
++            quads[j].x2, quads[j].y2, quads[j].x2, quads[j].y1,
++         };
++         memcpy(buffer + n++ * 8, v, sizeof(v));
++      }
++      hud_draw_colored_prims(hud, MESA_PRIM_QUADS, buffer, n * 4, quads[i].color[0],
++                             quads[i].color[1], quads[i].color[2], quads[i].color[3], 0, 0, 1);
++   }
++}
++
+ /**
+  * Draw the HUD to the texture \p tex.
+  * The texture is usually the back buffer being displayed.
+@@ -496,9 +735,12 @@
+          { &hud->font_sampler_state };
+    struct hud_pane *pane;
+    struct pipe_resource *releasebuf[3] = { 0 };
+-
+-   if (!huds_visible)
++   struct pipe_resource *vertex_buffer = NULL;
++
++   if (!huds_visible && !num_quads) {
++      hud->fb_width = tex->width0;
+       return;
++   }
+ 
+    hud->fb_width = tex->width0;
+    hud->fb_height = tex->height0;
+@@ -605,6 +847,10 @@
+       cso_draw_arrays(cso, MESA_PRIM_QUADS, 0, hud->bg.num_vertices);
+    }
+    hud->bg.vbuf.buffer.resource = NULL;
++
++   /* uploading the quads can retire the buffer that holds the text and lines */
++   pipe_resource_reference(&vertex_buffer, hud->text.vbuf.buffer.resource);
++   hud_draw_quads(hud);
+ 
+    /* draw accumulated vertices for text */
+    if (hud->text.num_vertices) {
+@@ -617,7 +863,7 @@
+    }
+    hud->text.vbuf.buffer.resource = NULL;
+ 
+-   if (hud->simple)
++   if (hud->simple || !huds_visible)
+       goto done;
+ 
+    /* draw accumulated vertices for white lines */
+@@ -650,6 +896,7 @@
+    }
+ 
+ done:
++   pipe_resource_reference(&vertex_buffer, NULL);
+    pipe_resource_release(pipe, releasebuf[2]);
+    pipe_resource_release(pipe, releasebuf[1]);
+    pipe_resource_release(pipe, releasebuf[0]);
+@@ -745,12 +992,16 @@
+          }
+       }
+ 
++      if (!huds_visible)
++         continue;
+       if (hud->simple)
+          hud_pane_accumulate_vertices_simple(hud, pane);
+       else
+          hud_pane_accumulate_vertices(hud, pane);
+    }
+ 
++   hud_goodluck_accumulate(hud);
++
+    /* unmap the uploader's vertex buffer before drawing */
+    u_upload_unmap(pipe->stream_uploader);
+ }

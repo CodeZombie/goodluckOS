@@ -1,10 +1,13 @@
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_image.h>
 #include <SDL2/SDL_ttf.h>
+#include <sys/inotify.h>
+#include <unistd.h>
 
 #include <algorithm>
 #include <cctype>
 #include <cstdlib>
+#include <cstring>
 #include <cmath>
 #include <filesystem>
 #include <fstream>
@@ -42,6 +45,9 @@ constexpr int kTextMargin           = 16;
 constexpr int kBorder               = 3;
 
 constexpr Uint32 kIdleCheckMs       = 60000;
+constexpr Uint32 kOsdRedrawMs       = 1800; // the Mesa HUD's feedback panel stays up 1.5 s...
+constexpr Uint32 kOsdFrameMs        = 200;  // ...over the frames Puppy draws meanwhile
+constexpr Sint32 kOsdCode           = 1;    // SDL_USEREVENT code of a new panel (0 is a d-pad repeat)
 constexpr Uint32 kRepeatDelayMs     = 350;  // holding a direction repeats it after this...
 constexpr Uint32 kRepeatRateMs      = 60;   // ...and then this often
 constexpr int kStickPress           = 16000; // left stick counts as a direction past about half travel...
@@ -729,7 +735,29 @@ static Action actionFromStick(int x, int y, Action current) {
     return pushed >= kStickPress ? dir : Action::None;
 }
 
+// osd-notify.sh writes the panel to /dev/shm/hud-osd, which the Mesa HUD draws over the frames
+// of every app. Puppy only draws on changes, so a new panel wakes it up to keep drawing.
+static int watchOsd(void*) {
+    int fd = inotify_init1(IN_CLOEXEC);
+    if (fd < 0 || inotify_add_watch(fd, "/dev/shm", IN_MOVED_TO) < 0) return 0;
+    alignas(inotify_event) char buf[1024];
+    ssize_t n;
+    while ((n = read(fd, buf, sizeof(buf))) > 0) {
+        for (char* p = buf; p < buf + n; p += sizeof(inotify_event) + ((inotify_event*)p)->len) {
+            const inotify_event* e = (const inotify_event*)p;
+            if (e->len && !strcmp(e->name, "hud-osd")) {
+                SDL_Event ev{};
+                ev.type = SDL_USEREVENT;
+                ev.user.code = kOsdCode;
+                SDL_PushEvent(&ev);
+            }
+        }
+    }
+    return 0;
+}
+
 int main() {
+    unsetenv("GALLIUM_HUD_STATUS");     // the header already shows the battery
     Model model;
     model.categories = loadCatalog();
     if (model.categories.empty()) {
@@ -745,6 +773,7 @@ int main() {
 
     Ui ui;
     if (!ui.ok()) return 1;
+    SDL_DetachThread(SDL_CreateThread(watchOsd, "osd", nullptr));
 
     SDL_GameController* pad = nullptr;
     for (int i = 0; i < SDL_NumJoysticks(); ++i) {
@@ -754,6 +783,7 @@ int main() {
     bool running = true;
     bool dirty = true;
     int shownBattery = -2;
+    Uint32 osdUntil = 0;
     Uint32 lastActivity = SDL_GetTicks();
     Action held = Action::None;
     Uint32 nextRepeat = 0;
@@ -772,13 +802,19 @@ int main() {
         int timeout = elapsed >= kIdleCheckMs ? 0 : (int)(kIdleCheckMs - elapsed);
         if (held != Action::None)
             timeout = std::min(timeout, (int)std::max<Sint32>(0, (Sint32)(nextRepeat - now)));
+        if (osdUntil) timeout = std::min(timeout, (int)kOsdFrameMs);
 
         SDL_Event ev;
         if (!SDL_WaitEventTimeout(&ev, timeout)) {
             now = SDL_GetTicks();
             if (held != Action::None && (Sint32)(now - nextRepeat) >= 0) {
                 ev.type = SDL_USEREVENT;
+                ev.user.code = 0;
                 nextRepeat = now + kRepeatRateMs;
+            } else if (osdUntil) {
+                dirty = true;   // the last frame, after the panel's time, takes it off
+                if ((Sint32)(now - osdUntil) >= 0) osdUntil = 0;
+                continue;
             } else {
                 lastActivity = now;
                 if (readBattery() != shownBattery) dirty = true;
@@ -796,7 +832,12 @@ int main() {
                     if (ev.window.event == SDL_WINDOWEVENT_EXPOSED) dirty = true;
                     break;
                 case SDL_USEREVENT:
-                    action = held;
+                    if (ev.user.code == kOsdCode) {
+                        osdUntil = SDL_GetTicks() + kOsdRedrawMs;
+                        dirty = true;
+                    } else {
+                        action = held;
+                    }
                     break;
                 case SDL_KEYDOWN:
                     if (!ev.key.repeat) action = actionFromKey(ev.key.keysym.sym);

@@ -36,7 +36,7 @@ Put screenshots here.
 | Launcher | EmulationStation (slow) | Puppy (fast) (Emulation Station as an optional package coming soon) |
 | Autostart Apps on Boot | No | Yes |
 | Ports | No | Yes, [Half Life 1](https://github.com/CodeZombie/glOSports-half-life) is ported and playable. More coming soon |
-| In-app Overlay | No | Coming soon |
+| In-app Overlay | No | Yes. Volume, brightness and audio output changes show over any app, and the battery level can stay in the corner (System Settings) |
 | Mountable SD Card | No, MBR is broken by default. | Yes, goodluckOS ships with a functioning MBR |
 | Built-in Games | Thousands of illegal roms, so sharing the firmware is technically illegal | Comes with Chocolate Doom + a shareware doom.wad. Completely legal to distribute |
 | GPL Compliant | No | Yes |

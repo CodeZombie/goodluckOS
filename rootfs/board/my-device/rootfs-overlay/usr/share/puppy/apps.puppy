@@ -17,7 +17,7 @@ CATEGORY=System
 NAME=Eject TF-2
 DESCRIPTION=Eject the microSD card in the TF-2 slot.
 COMMAND=doas umount /media/external
-ICON=/usr/share/icons/poweroff.png
+ICON=/usr/share/icons/eject-tf2.png
 
 [ENTRY]
 CATEGORY=System
@@ -39,12 +39,14 @@ NAME=User Guide
 DESCRIPTION=Learn how to use goodluckOS
 TERMINAL=1
 COMMAND=doas evsieve --input /dev/input/event2 grab --map btn:dpad_up key:up --map btn:dpad_down key:down --output repeat=enable & less /usr/share/doc/user_guide.txt
+ICON=/usr/share/icons/user-guide.png
 
 [ENTRY]
 CATEGORY=System
 NAME=Credits
 DESCRIPTION=Learn about the people who made goodluckOS
 COMMAND=credits /usr/share/credits/credits.ini
+ICON=/usr/share/icons/credits.png
 
 [ENTRY]
 CATEGORY=Terminal

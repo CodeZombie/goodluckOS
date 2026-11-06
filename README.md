@@ -8,9 +8,6 @@ Latest release: [0.1.0 [Oct 10, 2026]](https://codezombie.github.io/goodluckOS/d
 >
 > Please visit [The Firmware Builder](https://codezombie.github.io/goodluckOS/download.html). This will walk you through the steps of identifying if you have a compatible unit, and building a flashable goodluckOS image.
 
-# Screenshots
-Put screenshots here.
-
 # Features 
 | Feature | Stock Firmware | goodluckOS |
 | ------- | -------------- | ---------- |
@@ -35,7 +32,7 @@ Put screenshots here.
 | Libretro Cores | Older, unoptimized cores | Modern cores |
 | Launcher | EmulationStation (slow) | Puppy (fast) (Emulation Station as an optional package coming soon) |
 | Autostart Apps on Boot | No | Yes |
-| Ports | No | Yes, [Half Life 1](https://github.com/CodeZombie/glOSports-half-life) is ported and playable. More coming soon |
+| Ports | No | Yes, check out [GA36-Ports](https://ga36.genserek.net/) for the growing list of playable ports including Undertale, Half Life, Diablo and more! |
 | In-app Overlay | No | Coming soon |
 | Mountable SD Card | No, MBR is broken by default. | Yes, goodluckOS ships with a functioning MBR |
 | Built-in Games | Thousands of illegal roms, so sharing the firmware is technically illegal | Comes with Chocolate Doom + a shareware doom.wad. Completely legal to distribute |
@@ -131,11 +128,8 @@ goodluckOS ships with Chocolate Doom and a shareware Doom wad.
 
 goodluckOS will never be distributed with unauthorized copyright-protected materials. If you own the copyright to any games (or know of any permissively-licensed/CC games) that you think might make a good fit, please open an Issue! We would love to include more small, high-quality games with the OS by default.
 
-## About Ports
-Some subset of portmaster games could theoretically work, however I want to tamper your expectations a little bit before we all start getting too excited.
-The Allwinner A23/A33 is a 32-bit SoC. This means that 64-bit software simply _cannot_ run on it. There are a number of popular android ports that exist only as aarch64 (64-bit) distributions. Those will never work. Additionally, even with ZRAM there, the device is still heavily RAM-limited, so unoptimized games (I'm looking at you, Balatro) will struggle to run without patching.
-
-With that said, most of the games people actually care about (Stardew Valley, Half-Life 1, n64 re-comps, Android GameMaker games, OpenMW, OpenRCT2, + more) are 32-bit games, and therefore should theoretically work if anyone cares to create 32-bit ports.
+## Ports
+The fantastic `rincewindcz` has created and maintains a growing library of ports made for goodluckOS, available for download at [https://ga36.genserek.net/](https://ga36.genserek.net/).
 
 # Development
 

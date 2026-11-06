@@ -345,6 +345,10 @@ Page render_main(AppState& state) {
             std::string time = time_it != state.last_status.end() ? time_it->second : "";
             ImVec4 color = (res == "success") ? ImVec4(0.4f, 0.9f, 0.4f, 1.0f) : ImVec4(1.0f, 0.4f, 0.4f, 1.0f);
             center_text_colored(color, "Last resize attempt: " + res + " (" + time + ")");
+            auto reason_it = state.last_status.find("reason");
+            if (reason_it != state.last_status.end() && !reason_it->second.empty()) {
+                center_wrapped(reason_it->second);
+            }
             ImGui::Spacing();
         }
     }

@@ -28,6 +28,13 @@ ICON=/usr/share/icons/system-settings.png
 
 [ENTRY]
 CATEGORY=System
+NAME=App Installer
+DESCRIPTION=Install apps from zips in the apps folder, or remove them
+COMMAND=app-installer
+ICON=/usr/share/icons/app-installer.png
+
+[ENTRY]
+CATEGORY=System
 NAME=Resize Home
 DESCRIPTION=Resize your HOME partition
 COMMAND=resize-home

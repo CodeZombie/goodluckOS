@@ -1,0 +1,98 @@
+name: Rootfs
+
+on:
+  push:
+    branches: [main]
+    paths: ['rootfs/**', '.github/workflows/rootfs.yml']
+  pull_request:
+    paths: ['rootfs/**', '.github/workflows/rootfs.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# A new push to a pull request cancels its older run; pushes to a branch all run
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  rootfs:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 355
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Restore downloads
+        id: dl
+        uses: actions/cache/restore@v6
+        with:
+          # Buildroot's git mirrors are only there to make tarballs; ppsspp's alone is 3.4 GB
+          path: |
+            rootfs/dl
+            !rootfs/dl/*/git
+          key: rootfs-dl-${{ hashFiles('rootfs/Dockerfile', 'rootfs/configs/goodluck_defconfig', 'rootfs/package/**/*.mk') }}
+          restore-keys: rootfs-dl-
+
+      - name: Restore ccache
+        uses: actions/cache/restore@v6
+        with:
+          path: rootfs/ccache
+          key: rootfs-ccache-${{ github.run_id }}
+          restore-keys: rootfs-ccache-
+
+      # Stops early so a cold build that doesn't fit still saves its ccache
+      - name: Build the rootfs
+        working-directory: rootfs
+        timeout-minutes: 320
+        shell: bash
+        run: |
+          mkdir -p dl ccache
+          docker compose run --build --rm -T --name goodluck-ci \
+            -v "$PWD/dl:/src/dl" -v "$PWD/ccache:/root/.buildroot-ccache" \
+            -e CCACHE_MAXSIZE=4G \
+            goodluck-builder bash -c "/src/scripts/configure.sh && /src/scripts/build.sh" \
+            2>&1 | tee build.log | grep --line-buffered '^>>>'
+
+      - name: Disk usage
+        if: always()
+        run: |
+          docker rm -f goodluck-ci 2>/dev/null || true
+          sudo chown -R "$(id -u):$(id -g)" rootfs/dl rootfs/ccache
+          df -h /
+          du -sh rootfs/out rootfs/dl rootfs/ccache || true
+
+      - name: Show the end of the build log
+        if: failure()
+        run: tail -n 150 rootfs/build.log
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: rootfs
+          path: rootfs/out/images/rootfs.tar
+          if-no-files-found: error
+          retention-days: 14
+
+      - uses: actions/upload-artifact@v7
+        if: failure()
+        with:
+          name: build-log
+          path: rootfs/build.log
+          retention-days: 14
+
+      # Only pushes save, so pull requests don't evict the main branch's cache
+      - name: Save downloads
+        if: always() && github.event_name != 'pull_request' && steps.dl.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: |
+            rootfs/dl
+            !rootfs/dl/*/git
+          key: ${{ steps.dl.outputs.cache-primary-key }}
+
+      - name: Save ccache
+        if: always() && github.event_name != 'pull_request'
+        uses: actions/cache/save@v6
+        with:
+          path: rootfs/ccache
+          key: rootfs-ccache-${{ github.run_id }}

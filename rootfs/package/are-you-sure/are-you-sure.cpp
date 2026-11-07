@@ -45,12 +45,13 @@ enum class AppState {
 
 int main(int argc, char* argv[]) {
     if (argc < 3) {
-        std::cerr << "Usage: are-you-sure \"<Message>\" \"<command>\"" << std::endl;
+        std::cerr << "Usage: are-you-sure \"<Message>\" \"<command>\" [\"<accept button label>\"]" << std::endl;
         return -1;
     }
 
     const char* message = argv[1];
     const char* command = argv[2];
+    const char* acceptLabel = argc > 3 ? argv[3] : "Accept";
 
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMECONTROLLER) != 0) {
         return -1;
@@ -134,10 +135,10 @@ int main(int argc, char* argv[]) {
 
             ImGui::SameLine(0.0f, spacing);
 
-            if (ImGui::Button("Accept", ImVec2(buttonWidth, buttonHeight))) {
+            if (ImGui::Button(acceptLabel, ImVec2(buttonWidth, buttonHeight))) {
                 errorOutput = ExecuteCommand(command, exitCode);
 
-                if (exitCode != 0) {
+                if (exitCode != 0 || !errorOutput.empty()) {   // show what the command said
                     state = AppState::Error;
                 } else {
                     running = false;
@@ -148,7 +149,8 @@ int main(int argc, char* argv[]) {
             float buttonWidth = 140.0f;
             float buttonHeight = 50.0f;
 
-            ImGui::Text("Command Failed (Exit Code: %d)", exitCode);
+            if (exitCode == 0) ImGui::Text("Done");
+            else ImGui::Text("Command Failed (Exit Code: %d)", exitCode);
             ImGui::Separator();
 
             // Create a scrollable child region for the error text in case it's long

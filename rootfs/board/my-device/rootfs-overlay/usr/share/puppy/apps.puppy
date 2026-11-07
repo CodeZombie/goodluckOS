@@ -47,6 +47,13 @@ DESCRIPTION=Learn about the people who made goodluckOS
 COMMAND=credits /usr/share/credits/credits.ini
 
 [ENTRY]
+CATEGORY=System
+NAME=System Report
+DESCRIPTION=Save a report to attach to bug reports
+COMMAND=are-you-sure "Save systemReport.txt to HOME?" "/usr/local/bin/system-report" "Save"
+ICON=/usr/share/icons/system-report.png
+
+[ENTRY]
 CATEGORY=Terminal
 NAME=Last App Log
 DESCRIPTION=View the console logs of the last app

@@ -1,12 +1,12 @@
 # goodluckOS
 An uncompromisingly fast, small, modern, and feature-rich custom firmware for A23/A33-based handheld consoles.
 
-Latest release: [0.1.0 [Oct 10, 2026]](https://codezombie.github.io/goodluckOS/download.html)
-
 > [!IMPORTANT]
 > **goodluckOS is BETA software. You will run into bugs!**
 >
 > Please visit [The Firmware Builder](https://codezombie.github.io/goodluckOS/download.html). This will walk you through the steps of identifying if you have a compatible unit, and building a flashable goodluckOS image.
+
+Latest release: **0.1.0** - Oct 10, 2026
 
 # Features 
 | Feature | Stock Firmware | goodluckOS |
@@ -32,7 +32,7 @@ Latest release: [0.1.0 [Oct 10, 2026]](https://codezombie.github.io/goodluckOS/d
 | Libretro Cores | Older, unoptimized cores | Modern cores |
 | Launcher | EmulationStation (slow) | Puppy (fast) (Emulation Station as an optional package coming soon) |
 | Autostart Apps on Boot | No | Yes |
-| Ports | No | Yes, check out [GA36-Ports](https://ga36.genserek.net/) for the growing list of playable ports including Undertale, Half Life, Diablo and more! |
+| Ports | No | Yes, check out the [Ports/Software page](SOFTWARE.md) for the growing list of playable ports including GTA: San Andreas, Undertale, Half Life, Diablo and more! |
 | In-app Overlay | No | Coming soon |
 | Mountable SD Card | No, MBR is broken by default. | Yes, goodluckOS ships with a functioning MBR |
 | Built-in Games | Thousands of illegal roms, so sharing the firmware is technically illegal | Comes with Chocolate Doom + a shareware doom.wad. Completely legal to distribute |
@@ -58,6 +58,9 @@ To use it:
 2. Open a terminal and run `sudo screen /dev/ttyACM* 115200`
 3. When prompted, enter the credentials (username: `root`, password: `root`)
 
+## Ports / Software
+Visit the [Ports/Software page](SOFTWARE.md) for a growing list of ports and software made for goodluckOS
+
 ## How Do I Install goodluckOS?
 Check out the [Firmware Builder](https://codezombie.github.io/goodluckOS/download.html) for instructions and video guides.
 
@@ -69,13 +72,12 @@ Don't have the original microSD card? Open an issue here on github, we have micr
 - Headphone auto-detection. We have reason to believe some GA36-MB variants simply lack the hardware to do this.
 - More LibRetro cores
 - Fine tune existing LibRetro cores for best performance.
-- Portmaster (or equivalent)
 - EmulationStation (as an optional replacement for Puppy)
 - USB Networking
 - CPU Overclocking
 
 ## Supported Devices
-Every known variant of the GA36-MB is supported. There are many more Allwinner A23/A33 devices that will almost certainly work, but without the hardware it's hard to say for certain.
+Every known variant of the GA36-MB is supported. This includes "Tekko" branded devices.
 
 ### Display Panels
 The GA36-MB family of devices ship with at least two different display panels. gooduckOS supports both, but we haven't yet found a good way to determine which panel you have ahead of time. For now, just try both until one works.
@@ -85,22 +87,18 @@ If the Firmware Builder tells you your device is not supported, you may have a n
 #### Coming Soon:
 - R36MAX
 - F35v
+- Gaminja Batocera K36 -- _[Nov 8, 2026 Update] This device has been purchased by our development team. Support coming soon._
 - Other A23/A33-based devices
 
 Know of another Allwinner-based handheld not listed on this page? Open a new [Issue](https://github.com/CodeZombie/goodluckOS/issues) and let me know!
 
-If you have one such device, and some spare time, leave an issue on Github and we'll work with you to build support for it, and get it running on your hardware.
+If you have one such device, and some spare time, leave an issue on Github and we'll work with you to build support for it and get it running on your hardware.
 
 Alternatively, consider contributing to the [Device Fund](https://ko-fi.com/jeremyclark) so we can purchase new consoles and port goodluckOS to them.
 
 ## Puppy
-Puppy is goodluckOS' application launcher. It's what you see when you start goodluckOS. It was designed to be simple, flexible, and most importantly: fast.
-
-Puppy works with appd to ensure it's never running when you launch an application. This ensures all of your RAM and CPU resources are available to your game, not an idle launcher.
-
-Puppy uses a ini-formatted `apps.puppy` files to populate it's application list. 
-
-Add a new entry by modifying the `apps.puppy` file in your HOME partition. Take a look at the comments at the top of that file for syntax/examples
+Puppy is goodluckOS' default application launcher. It's what you see when you start goodluckOS.
+Read more about Puppy [here](rootfs/package/puppy/PUPPY.md).
 
 ## How do I add games?
 Plug the console into your PC with a USB cable and open `GA36MB -> HOME` (Windows: This PC; Linux: your file manager; macOS needs an MTP app such as [OpenMTP](https://openmtp.ganeshrvel.com/)). Or plug the SD card into your PC and open up the HOME partition. In there you'll find a `roms` folder with a few subfolders for each system. Add your roms to those.
@@ -112,16 +110,7 @@ To add custom art to Puppy, add an image file into the `icons` folder in your ro
 ### Second card (TF-2 slot)
 A FAT32/exFAT card in the second slot is found when the console starts, and its games show up in each system's tab. Put them in a `roms` folder with the same system folders as HOME (`roms/snes`, `roms/psx`, `roms/gba`...), and covers in each folder's `icons`. A card with no `roms` folder gets the folders created the first time it's mounted; existing folders and files are never touched.
 
-Puppy finds games by folder, not by file type: games loose on the card, or in the wrong system's folder, won't show up or won't start. exFAT cards (most cards over 32 GB come that way) aren't read yet, so format the card as FAT32.
-
-### Can I add my own archives?
-You sure can!
-
-To add a new emulator, find an appropriate armhf libretro core .so file. Add it to either:
-1. The `/usr/lib/libretro` folder in the `linux` partition, or
-2. Anywhere in your HOME partition
-
-Then modify `HOME -> apps.puppy` with a new `[ARCHIVE]` entry, pointing the COMMAND to your new libretro core. Take a look at `HOME -> apps.puppy` for an exmaple.
+Puppy finds games by folder, not by file type: games loose on the card, or in the wrong system's folder, won't show up or won't start.
 
 ## Does goodluckOS come with any games?
 goodluckOS ships with Chocolate Doom and a shareware Doom wad.

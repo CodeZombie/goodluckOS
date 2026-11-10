@@ -7,7 +7,7 @@ Thanks to the oustanding work by the goodluckOS community, we now have a growing
 | Kennel | rincewindcz | A feature-packed alternative launcher | [https://github.com/rincewindcz/kennel](https://github.com/rincewindcz/kennel) |
 
 ## Ports
-| Game | Author | Link |
+| Game | Port Author | Link |
 | ---- | ------ | ---- |
 | Balatro, Quake, Undertale, Diablo, + More! | rincewindcz | [https://ga36.genserek.net/](https://ga36.genserek.net/) |
 | GTA III | Péter Nyakas | [https://github.com/nyakaspeter/glOSports-gta3/releases](https://github.com/nyakaspeter/glOSports-gta3/releases)
@@ -19,6 +19,8 @@ Thanks to the oustanding work by the goodluckOS community, we now have a growing
 | Max Payne | Péter Nyakas | [https://github.com/nyakaspeter/glOSports-maxpayne/releases](https://github.com/nyakaspeter/glOSports-maxpayne/releases) |
 | Star Wars Jedi Knight II: Jedi Outcast | Péter Nyakas | [https://github.com/nyakaspeter/glOSports-jk2/releases](https://github.com/nyakaspeter/glOSports-jk2/releases) |
 | Star Wars Jedi Knight: Jedi Academy | Péter Nyakas | [https://github.com/nyakaspeter/glOSports-jka/releases](https://github.com/nyakaspeter/glOSports-jka/releases) |
+| Hotline Miami | Péter Nyakas | [https://github.com/nyakaspeter/glOSports-hotlinemiami/releases](https://github.com/nyakaspeter/glOSports-hotlinemiami/releases) |
+| Hotline Miami 2: Wrong Number | Péter Nyakas | [https://github.com/nyakaspeter/glOSports-hotlinemiami2/releases](https://github.com/nyakaspeter/glOSports-hotlinemiami2/releases) |
 | Undertale | igol23 | [https://github.com/igol23/glOSports-undertale](https://github.com/igol23/glOSports-undertale) |
 | Luanti (Minetest) | Maicon Alves | [https://github.com/alvesmaicon/luanti](https://github.com/alvesmaicon/luanti) |
 

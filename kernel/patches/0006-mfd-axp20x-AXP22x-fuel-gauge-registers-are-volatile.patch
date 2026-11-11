@@ -1,0 +1,23 @@
+From: alvesmaicon <alvesmaiconn@gmail.com>
+Subject: [PATCH] mfd: axp20x: AXP22x fuel gauge registers are volatile
+
+The AXP22x fuel gauge updates its own registers: the calibration status
+in 0xb8, the battery resistance in 0xba-0xbb, the open circuit voltage
+in 0xbc-0xbd, the learned capacity in 0xe0-0xe1, the coulomb counter in
+0xe2-0xe3 and the OCV and coulomb percentages in 0xe4-0xe5. Only 0xb9
+was volatile, so after the first read the regmap returned stale values.
+The layout is the AXP288's, whose names are used here.
+
+diff --git a/drivers/mfd/axp20x.c b/drivers/mfd/axp20x.c
+--- a/drivers/mfd/axp20x.c
++++ b/drivers/mfd/axp20x.c
+@@ -139,7 +139,8 @@
+ 	regmap_reg_range(AXP20X_IRQ1_EN, AXP20X_IRQ5_STATE),
+ 	regmap_reg_range(AXP22X_GPIO_STATE, AXP22X_GPIO_STATE),
+ 	regmap_reg_range(AXP22X_PMIC_TEMP_H, AXP20X_IPSOUT_V_HIGH_L),
+-	regmap_reg_range(AXP20X_FG_RES, AXP20X_FG_RES),
++	regmap_reg_range(AXP20X_CC_CTRL, AXP288_FG_OCVL_REG),
++	regmap_reg_range(AXP288_FG_DES_CAP1_REG, AXP288_FG_CC_CAP_REG),
+ };
+ 
+ static const struct regmap_access_table axp22x_writeable_table = {

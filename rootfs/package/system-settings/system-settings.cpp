@@ -2,6 +2,8 @@
 #include "imgui.h"
 #include "imgui_impl_sdl2.h"
 #include "imgui_impl_sdlrenderer2.h"
+#include <algorithm>
+#include <cmath>
 #include <fstream>
 #include <vector>
 #include <fcntl.h>
@@ -9,13 +11,17 @@
 #include <alsa/asoundlib.h>
 
 const char* ALSA_MIXER_NAME = "Headphone";
-const char* ALSA_CARD = "GA36mbAudio";
+const char* ALSA_CARD = "hw:GA36mbAudio";
+const char* BACKLIGHT = "/sys/class/backlight/backlight/brightness";
 
 int get_brightness() {
-    return 5;
+    std::ifstream file(BACKLIGHT);
+    int brightness = 5;
+    file >> brightness;
+    return std::max(1, std::min(brightness, 10));
 }
 void set_brightness(int brightness) {
-    std::ofstream file("/sys/class/backlight/backlight/brightness");
+    std::ofstream file(BACKLIGHT);
     if (file.is_open()) {
         file << brightness;
     }
@@ -39,7 +45,8 @@ long get_alsa_volume() {
     if (elem) {
         snd_mixer_selem_get_playback_volume_range(elem, &min, &max);
         snd_mixer_selem_get_playback_volume(elem, SND_MIXER_SCHN_FRONT_LEFT, &vol);
-        vol = (vol * 100) / max;
+        // Rounded as amixer does, so the slider agrees with the volume buttons
+        vol = max > min ? std::lround((vol - min) * 100.0 / (max - min)) : 0;
     }
     snd_mixer_close(handle);
     return vol;
@@ -61,7 +68,7 @@ void set_alsa_volume(long volume) {
     snd_mixer_elem_t* elem = snd_mixer_find_selem(handle, sid);
     if (elem) {
         snd_mixer_selem_get_playback_volume_range(elem, &min, &max);
-        long scaled_vol = (volume * max) / 100;
+        long scaled_vol = min + (long)std::ceil(volume * (max - min) / 100.0);
         snd_mixer_selem_set_playback_volume_all(elem, scaled_vol);
     }
     snd_mixer_close(handle);
@@ -205,21 +212,24 @@ int main(int argc, char* argv[]) {
             set_alsa_mute(current_mute);
         }
 
-        if (ImGui::Button("System Settings")) {
+        // Not written yet: greyed out, and the D-pad skips them
+        ImGui::BeginDisabled();
+        if (ImGui::Button("System Settings (coming soon)")) {
             // CPU Governer [select box]
             // CPU info [label]
             // Ram info [label]
             // Show free space on SD card
             // Maybe move this to a dedicated System Info app?
         }
-        if (ImGui::Button("Input Settings")) {
+        if (ImGui::Button("Input Settings (coming soon)")) {
             // Swap A/B [toggle]
             // Input Tester (maybe this should be it's own app?)
         }
-        if (ImGui::Button("Date/Time")) {
+        if (ImGui::Button("Date/Time (coming soon)")) {
             // Set date
             // Set Time
         }
+        ImGui::EndDisabled();
 
         ImGui::Spacing();
         if (ImGui::Button("Exit Application")) {

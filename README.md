@@ -33,7 +33,7 @@ Latest release: **0.1.0** - Oct 10, 2026
 | Launcher | EmulationStation (slow) | Puppy (fast) (Emulation Station as an optional package coming soon) |
 | Autostart Apps on Boot | No | Yes |
 | Ports | No | Yes, check out the [Ports/Software page](SOFTWARE.md) for the growing list of playable ports including GTA: San Andreas, Undertale, Half Life, Diablo and more! |
-| In-app Overlay | No | Coming soon |
+| In-app Overlay | No | Yes. Volume, brightness and audio output changes show over any app |
 | Mountable SD Card | No, MBR is broken by default. | Yes, goodluckOS ships with a functioning MBR |
 | Built-in Games | Thousands of illegal roms, so sharing the firmware is technically illegal | Comes with Chocolate Doom + a shareware doom.wad. Completely legal to distribute |
 | GPL Compliant | No | Yes |

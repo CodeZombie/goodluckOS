@@ -4,7 +4,7 @@
 #
 ################################################################################
 
-LIBRETRO_CORES_VERSION = master
+LIBRETRO_CORES_VERSION = origin/master
 LIBRETRO_CORES_SITE = https://github.com/libretro/libretro-super.git
 LIBRETRO_CORES_SITE_METHOD = git
 LIBRETRO_CORES_LICENSE = Various (GPL-2.0+, MIT, Non-Commercial)

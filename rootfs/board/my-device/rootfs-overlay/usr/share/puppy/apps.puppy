@@ -204,3 +204,12 @@ ENTRY_EXTENSIONS=wad;iwad;
 ENTRY_ICONS_DIRECTORIES=/home/player/roms/doom/icons;/media/external/roms/doom/icons
 DEFAULT_ICON=/usr/share/icons/chocolate-doom.png
 COMMAND=chocolate-doom -iwad %s
+
+[ARCHIVE]
+NAME=Nintendo DS
+Description=Nintendo DS
+ENTRY_DIRECTORIES=/home/player/roms/doom;/media/external/roms/nds
+ENTRY_EXTENSIONS=nds
+ENTRY_ICONS_DIRECTORIES=/home/player/roms/doom/icons;/media/external/roms/nds/icons
+DEFAULT_ICON=/usr/share/icons/nds.png
+COMMAND=dseperate %s

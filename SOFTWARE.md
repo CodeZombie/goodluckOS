@@ -23,6 +23,8 @@ Thanks to the oustanding work by the goodluckOS community, we now have a growing
 | Hotline Miami 2: Wrong Number | Péter Nyakas | [https://github.com/nyakaspeter/glOSports-hotlinemiami2/releases](https://github.com/nyakaspeter/glOSports-hotlinemiami2/releases) |
 | Undertale | igol23 | [https://github.com/igol23/glOSports-undertale](https://github.com/igol23/glOSports-undertale) |
 | Luanti (Minetest) | Maicon Alves | [https://github.com/alvesmaicon/luanti](https://github.com/alvesmaicon/luanti) |
+| Stardew Valley | Maicon Alves | [https://github.com/alvesmaicon/glOSports-stardew/releases](https://github.com/alvesmaicon/glOSports-stardew/releases)
+| Ship of Harkinian & 2 Ship 2 Harkinian | Maicon Alves | [https://github.com/alvesmaicon/glOSports-harbourmasters](https://github.com/alvesmaicon/glOSports-harbourmasters) |
 | Minecraft (Bedrock) | TwtEnchantP0wer | [https://github.com/TwtEnchantp0wer/glosports-minecraft-bedrock/releases/](https://github.com/TwtEnchantp0wer/glosports-minecraft-bedrock/releases/) |
 
 ### Did we miss something?

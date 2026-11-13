@@ -23,6 +23,7 @@ Thanks to the oustanding work by the goodluckOS community, we now have a growing
 | Hotline Miami 2: Wrong Number | Péter Nyakas | [https://github.com/nyakaspeter/glOSports-hotlinemiami2/releases](https://github.com/nyakaspeter/glOSports-hotlinemiami2/releases) |
 | Undertale | igol23 | [https://github.com/igol23/glOSports-undertale](https://github.com/igol23/glOSports-undertale) |
 | Luanti (Minetest) | Maicon Alves | [https://github.com/alvesmaicon/luanti](https://github.com/alvesmaicon/luanti) |
+| Minecraft (Bedrock) | TwtEnchantP0wer | [https://github.com/TwtEnchantp0wer/glosports-minecraft-bedrock/releases/](https://github.com/TwtEnchantp0wer/glosports-minecraft-bedrock/releases/) |
 
 ### Did we miss something?
 If you want your software/port included in this document, open a new [Issue](https://github.com/CodeZombie/goodluckOS/issues/) (or make an PR for this file) and we'll add it right away.

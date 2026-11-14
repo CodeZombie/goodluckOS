@@ -1,0 +1,75 @@
+From: alvesmaicon <alvesmaiconn@gmail.com>
+Subject: [PATCH] power: supply: axp20x_battery: AXP22x gauge to full when the charge ends
+
+The AXP22x fuel gauge's coulomb count doesn't follow the charger: a
+charge can end with the battery at 4.2 V and the gauge still at 44%,
+and the count can also run past the capacity. On the charge done IRQ,
+set the count (0xe2-0xe3) to the capacity (0xe0-0xe1), as the BSP kernel
+does when the count goes past the capacity.
+
+diff --git a/drivers/power/supply/axp20x_battery.c b/drivers/power/supply/axp20x_battery.c
+--- a/drivers/power/supply/axp20x_battery.c
++++ b/drivers/power/supply/axp20x_battery.c
+@@ -49,6 +49,7 @@
+ 
+ #define AXP209_FG_PERCENT		GENMASK(6, 0)
+ #define AXP22X_FG_VALID			BIT(7)
++#define AXP22X_FG_CAP_SET		BIT(7)
+ 
+ #define AXP20X_CHRG_CTRL1_ENABLE	BIT(7)
+ #define AXP20X_CHRG_CTRL1_TGT_VOLT	GENMASK(6, 5)
+@@ -978,6 +979,25 @@ static void axp209_set_battery_info(struct platform_device *pdev,
+ 	}
+ }
+ 
++/* the gauge's count doesn't follow the charger to full: set it to the capacity */
++static irqreturn_t axp22x_battery_charge_done(int irq, void *devid)
++{
++	struct axp20x_batt_ps *axp_batt = devid;
++	unsigned int cap_h, cap_l;
++
++	if (!regmap_read(axp_batt->regmap, AXP288_FG_DES_CAP1_REG, &cap_h) &&
++	    !regmap_read(axp_batt->regmap, AXP288_FG_DES_CAP0_REG, &cap_l) &&
++	    (cap_h & AXP22X_FG_CAP_SET)) {
++		regmap_write(axp_batt->regmap, AXP288_FG_CC_MTR1_REG, cap_h);
++		regmap_write(axp_batt->regmap, AXP288_FG_CC_MTR0_REG, cap_l);
++		dev_info(axp_batt->dev, "charge done, gauge set to full\n");
++	}
++
++	power_supply_changed(axp_batt->batt);
++
++	return IRQ_HANDLED;
++}
++
+ static void axp717_set_battery_info(struct platform_device *pdev,
+ 				    struct axp20x_batt_ps *axp_batt,
+ 				    struct power_supply_battery_info *info)
+@@ -1095,7 +1115,7 @@ static int axp20x_power_probe(struct platform_device *pdev)
+ 	struct power_supply_config psy_cfg = {};
+ 	struct power_supply_battery_info *info;
+ 	struct device *dev = &pdev->dev;
+-	int ret;
++	int irq, ret;
+ 
+ 	if (!of_device_is_available(pdev->dev.of_node))
+ 		return -ENODEV;
+@@ -1139,6 +1159,19 @@ static int axp20x_power_probe(struct platform_device *pdev)
+ 	 */
+ 	axp20x_get_constant_charge_current(axp20x_batt, &axp20x_batt->max_ccc);
+ 
++	irq = platform_get_irq_byname_optional(pdev, "CHARG_DONE");
++	if (irq > 0) {
++		struct axp20x_dev *axp20x = dev_get_drvdata(pdev->dev.parent);
++
++		ret = devm_request_any_context_irq(dev,
++				regmap_irq_get_virq(axp20x->regmap_irqc, irq),
++				axp22x_battery_charge_done, 0,
++				"axp20x-battery", axp20x_batt);
++		if (ret < 0)
++			dev_err(dev, "couldn't request the charge done irq: %d\n",
++				ret);
++	}
++
+ 	return 0;
+ }
+ 

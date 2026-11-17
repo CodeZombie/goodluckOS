@@ -1,0 +1,14 @@
+#!/bin/sh
+# Stop charging at 90 % while on a computer's USB
+
+case "$1" in
+    start)
+        /usr/local/bin/battery-care.sh </dev/null >/dev/null 2>&1 &
+        ;;
+    stop)
+        kill $(ps | grep '[b]attery-care.sh' | awk '{ print $1 }') 2>/dev/null
+        # the PMIC keeps the setting while off: leave the charger on for the next charge
+        echo Charging > /sys/class/power_supply/axp20x-battery/status
+        ;;
+esac
+exit 0

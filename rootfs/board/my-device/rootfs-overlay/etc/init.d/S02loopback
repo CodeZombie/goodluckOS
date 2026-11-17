@@ -1,0 +1,8 @@
+#!/bin/sh
+# Bring up the loopback interface: nothing else configures networking, and sockets on 127.0.0.1 need it
+
+case "$1" in
+    start) ip link set lo up ;;
+    stop)  ;;
+esac
+exit 0

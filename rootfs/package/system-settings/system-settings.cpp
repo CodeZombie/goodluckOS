@@ -7,6 +7,10 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <alsa/asoundlib.h>
+#include <arpa/inet.h>
+#include <ifaddrs.h>
+#include <cstdlib>
+#include <string>
 
 const char* ALSA_MIXER_NAME = "Headphone";
 const char* ALSA_CARD = "GA36mbAudio";
@@ -19,6 +23,31 @@ void set_brightness(int brightness) {
     if (file.is_open()) {
         file << brightness;
     }
+}
+
+// The USB data port: HOME over MTP, or a network adapter for SSH and the PC's shared internet (usb-mode.sh)
+bool get_usb_network() {
+    std::ifstream file("/etc/player-flags/usb-mode");
+    std::string mode;
+    return std::getline(file, mode) && mode == "network";
+}
+void set_usb_network(bool network) {
+    system(network ? "doas /usr/local/bin/usb-mode.sh network" : "doas /usr/local/bin/usb-mode.sh mtp");
+}
+// The address a PC or phone sharing its internet handed out, next to the console's own 192.168.36.1
+std::string get_usb_address() {
+    std::string address;
+    struct ifaddrs* list;
+    if (getifaddrs(&list) != 0) return address;
+    for (struct ifaddrs* a = list; a; a = a->ifa_next) {
+        if (a->ifa_addr && a->ifa_addr->sa_family == AF_INET && std::string(a->ifa_name) == "usb0") {
+            char buf[INET_ADDRSTRLEN];
+            inet_ntop(AF_INET, &((struct sockaddr_in*)a->ifa_addr)->sin_addr, buf, sizeof(buf));
+            if (std::string(buf) != "192.168.36.1") address = buf;
+        }
+    }
+    freeifaddrs(list);
+    return address;
 }
 
 long get_alsa_volume() {
@@ -153,6 +182,7 @@ int main(int argc, char* argv[]) {
     }
 
     // Settings Values
+    bool usb_network = get_usb_network();
     int display_brightness = get_brightness();
     int current_volume = get_alsa_volume();
     bool current_mute = get_alsa_mute();
@@ -162,7 +192,8 @@ int main(int argc, char* argv[]) {
     while (running) {
         SDL_Event event;
 
-        if (SDL_WaitEvent(&event)) {
+        // On the USB network, redraw every second so the address shows up when the PC hands it out
+        if (usb_network ? SDL_WaitEventTimeout(&event, 1000) : SDL_WaitEvent(&event)) {
             do {
                 ImGui_ImplSDL2_ProcessEvent(&event);
                 if (event.type == SDL_QUIT) {
@@ -203,6 +234,26 @@ int main(int argc, char* argv[]) {
 
         if (ImGui::Checkbox("Global Mute", &current_mute)) {
             set_alsa_mute(current_mute);
+        }
+
+        section_headear("USB");
+        if (ImGui::RadioButton("Files (MTP)", !usb_network) && usb_network) {
+            usb_network = false;
+            set_usb_network(false);
+        }
+        ImGui::SameLine();
+        if (ImGui::RadioButton("Network", usb_network) && !usb_network) {
+            usb_network = true;
+            set_usb_network(true);
+        }
+        if (usb_network) {
+            ImGui::Text("SSH: root@192.168.36.1");
+            std::string address = get_usb_address();
+            if (address.empty()) {
+                ImGui::Text("Internet: share the PC's connection");
+            } else {
+                ImGui::Text("Internet: %s", address.c_str());
+            }
         }
 
         if (ImGui::Button("System Settings")) {

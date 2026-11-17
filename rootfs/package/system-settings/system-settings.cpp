@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <cmath>
 #include <fstream>
+#include <string>
 #include <vector>
 #include <fcntl.h>
 #include <unistd.h>
@@ -193,13 +194,19 @@ int main(int argc, char* argv[]) {
         ImGui::Separator();
         ImGui::Spacing();
 
+        // Both sliders get the grab of the brightness one (10 values), so they look the same
+        ImGui::GetStyle().GrabMinSize = ImGui::CalcItemWidth() / 10;
+
         section_headear("Display");
         if (ImGui::SliderInt("Brightness", &display_brightness, 1, 10)) {
             set_brightness(display_brightness);
         }
 
         section_headear("Audio Settings");
-        if (ImGui::SliderInt("Master Volume", &current_volume, 0, 100)) {
+        // Steps of 5, like the volume buttons (volstep.sh)
+        int volume_step = (current_volume + 2) / 5;
+        if (ImGui::SliderInt("Master Volume", &volume_step, 0, 20, std::to_string(volume_step * 5).c_str())) {
+            current_volume = volume_step * 5;
             set_alsa_volume(current_volume);
 
             if (current_mute && current_volume > 0) {

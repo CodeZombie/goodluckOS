@@ -18,4 +18,6 @@ case "$1" in
 esac
 
 echo "$new" > "$MODE_FILE"
+# out of the cgroup of the app that called it, which appctl empties when the app ends: the daemons must stay
+echo $$ > /sys/fs/cgroup/cgroup.procs 2>/dev/null
 /etc/init.d/S30usb-gadget restart

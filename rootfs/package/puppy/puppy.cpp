@@ -44,6 +44,7 @@ constexpr int kBorder               = 3;
 constexpr Uint32 kIdleCheckMs       = 60000;
 constexpr Uint32 kRepeatDelayMs     = 350;  // holding a direction repeats it after this...
 constexpr Uint32 kRepeatRateMs      = 60;   // ...and then this often
+constexpr Uint32 kInputPollMs       = 10;   // see waitEvent()
 constexpr int kStickPress           = 16000; // left stick counts as a direction past about half travel...
 constexpr int kStickRelease         = 8000;  // ...and lets go below about a quarter (axes span +-32767)
 constexpr size_t kMaxCachedIcons    = 64;
@@ -551,6 +552,19 @@ static void restoreCursor(Model& m) {
     if (m.find(category, name, r, c)) { m.row = r; m.categories[r].col = c; }
 }
 
+// SDL_WaitEventTimeout() can't sleep until input arrives on KMSDRM (no WaitEventTimeout in the
+// backend), so it polls every 1 ms. Polling every kInputPollMs keeps navigation instant and wakes
+// the CPU 10x less while the launcher sits idle.
+static bool waitEvent(SDL_Event* ev, int timeoutMs) {
+    const Uint32 end = SDL_GetTicks() + timeoutMs;
+    for (;;) {
+        if (SDL_PollEvent(ev)) return true;
+        const Sint32 left = (Sint32)(end - SDL_GetTicks());
+        if (left <= 0) return false;
+        SDL_Delay(std::min<Uint32>(left, kInputPollMs));
+    }
+}
+
 static int readBattery() {
     std::error_code ec;
     for (fs::directory_iterator it("/sys/class/power_supply", ec), end; !ec && it != end; it.increment(ec)) {
@@ -774,7 +788,7 @@ int main() {
             timeout = std::min(timeout, (int)std::max<Sint32>(0, (Sint32)(nextRepeat - now)));
 
         SDL_Event ev;
-        if (!SDL_WaitEventTimeout(&ev, timeout)) {
+        if (!waitEvent(&ev, timeout)) {
             now = SDL_GetTicks();
             if (held != Action::None && (Sint32)(now - nextRepeat) >= 0) {
                 ev.type = SDL_USEREVENT;

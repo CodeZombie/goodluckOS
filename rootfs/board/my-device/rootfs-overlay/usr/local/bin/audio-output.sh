@@ -18,3 +18,5 @@ esac
 
 [ "$new" = headphones ] && sw=off || sw=on
 amixer -q -c "$CARD" cset name='Speaker Switch' "$sw"
+[ "$new" = headphones ] && out=Headphones || out=Speaker
+/usr/local/bin/osd-notify.sh "Audio output" "$out"

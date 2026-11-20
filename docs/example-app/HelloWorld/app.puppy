@@ -1,0 +1,8 @@
+# An example goodluckOS app: copy this folder, rename it, change it.
+[ENTRY]
+NAME=Hello World
+DESCRIPTION=A tiny example app
+COMMAND=sh hello.sh
+ICON=icon.png
+VERSION=1.0
+TERMINAL=1

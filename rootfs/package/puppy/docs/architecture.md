@@ -19,6 +19,13 @@ RGBA values live in `src/palette/palette.cpp`. The renderer decides where to
 apply each color. Layout, fonts, textures, and drawing remain in
 `src/ui/ui.cpp`. The palette is fixed at build time.
 
+The `are-you-sure` confirmation dialog builds the same palette source into
+its own executable. It uses the base colors for its background, text,
+buttons, and controller focus.
+When the prompt opens, **Cancel** receives the initial navigation focus.
+The dialog renders the startup frames before waiting indefinitely for
+input so the focus highlight can appear without a button press.
+
 ## Build and test
 
 From this package directory, use `./build-local.sh` for a native build.

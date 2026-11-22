@@ -72,6 +72,8 @@ Linux and Windows 10 (version 1903) or newer need no drivers. macOS hasn't been 
 Visit the [Ports/Software page](SOFTWARE.md) for a growing list of ports and software made for goodluckOS
 
 ## How Do I Install goodluckOS?
+The [user guide](USER_GUIDE.md) covers installation, expanding HOME, adding games and cores, and backing up before an update.
+
 Check out the [Firmware Builder](https://codezombie.github.io/goodluckOS/download.html) for instructions and video guides.
 
 You'll need a backup of at least the first 128mb of the original microSD card that came with your device.

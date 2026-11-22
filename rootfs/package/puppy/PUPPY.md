@@ -79,3 +79,7 @@ Yes! To add a new emulator:
 ## Coming Soon
 - EmulationStation (`es_systems.cfg`) schema support
 - Custom themes and layout customization
+
+## Development
+
+See the [architecture and build notes](docs/architecture.md).

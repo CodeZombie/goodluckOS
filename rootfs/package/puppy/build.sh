@@ -1,9 +1,9 @@
 #!/bin/sh
+set -eu
+cd -- "$(dirname -- "$0")"
 
-CXX="../../out/host/bin/arm-buildroot-linux-gnueabihf-g++"
-STAGING="../../out/host/arm-buildroot-linux-gnueabihf/sysroot"
-
-$CXX -std=c++17 -o puppy \
-    puppy.cpp \
-    -I$STAGING/usr/include/SDL2 \
-    -O2 -lpthread -lSDL2 -lSDL2_image -lSDL2_ttf -lSDL2_gfx
+# Buildroot must have produced its ARM toolchain before using this helper.
+exec make all \
+    AR="$PWD/../../out/host/bin/arm-buildroot-linux-gnueabihf-ar" \
+    CXX="$PWD/../../out/host/bin/arm-buildroot-linux-gnueabihf-g++" \
+    BUILD_DIR=local-out/arm OUTPUT=puppy "$@"

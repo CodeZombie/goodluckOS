@@ -1,0 +1,879 @@
+#!/usr/bin/env luajit
+-- puppy: A minimalist app launcher for goodluckOS
+
+local SDL     = require "SDL"
+local image   = require "SDL.image"
+local ttf     = require "SDL.ttf"
+local sqlite3 = require "lsqlite3"
+local json    = require "cjson"
+
+local unpack = table.unpack or unpack
+local floor, ceil, max, min, abs = math.floor, math.ceil, math.max, math.min, math.abs
+
+-- # Config
+local DB_PATH      = "/var/lib/goodluckos/apps.sqlite"
+local FONT_FILE    = "/usr/share/fonts/inter/Inter_24pt-Medium.ttf"
+local OVERLAY_FILE = "/usr/share/puppy/assets/overlay.png"
+local FALLBACK_ICON= "/usr/share/puppy/assets/fallback.png"
+local STATE_FILE   = "/dev/shm/puppy-state"
+
+local DEFAULT_CATEGORY    = "Games"
+local FAVOURITES_NAME     = "Favourites" -- Pinned to the top of the screen
+local LAST_CATEGORIES     = { "Terminal", "System" } -- pinned to the bottom of the screen in this order
+local META_FIELDS         = { "release-year", "publisher", "developer", "genre", "players" }
+
+local IDLE_CHECK_MS   = 60000
+local REPEAT_DELAY_MS = 350
+local REPEAT_RATE_MS  = 60
+local INPUT_POLL_MS   = 10
+local STICK_PRESS     = 16000
+local STICK_RELEASE   = 8000
+
+local PAGE_SIZE         = 32 -- rows fetched per db query
+local MAX_CACHED_PAGES  = 12
+local MAX_CACHED_ICONS  = 64
+local MAX_ICON_LOADS_PER_FRAME = 2 -- keeps fast scrolling smooth; icons pop in over next frames
+local MAX_CACHED_TEXTS  = 256
+local MAX_DESC_LINES    = 3
+
+local BASE_W, BASE_H = 640, 480
+
+local function rgb(hex)
+    return { r = floor(hex / 65536) % 256, g = floor(hex / 256) % 256, b = hex % 256, a = 255 }
+end
+
+local WHITE, GREY, BLACK, YELLOW = rgb(0xFFFFFF), rgb(0xAAAAAA), rgb(0x000000), rgb(0xFFCD3C)
+local TILE, CLEAR = rgb(0x28282C), rgb(0x18181C)
+
+local function colorKey(c) return c.r .. "," .. c.g .. "," .. c.b .. "," .. c.a end
+
+local PAD_A, PAD_Y = 0, 3
+local PAD_UP, PAD_DOWN, PAD_LEFT, PAD_RIGHT = 11, 12, 13, 14
+local AXIS_LEFTX, AXIS_LEFTY = 0, 1
+
+-- # Helpers
+local function round(v) return floor(v + 0.5) end
+
+local function shellQuote(s)
+    return "'" .. s:gsub("'", "'\\''") .. "'"
+end
+
+local function trim(s) return (s:gsub("^%s+", ""):gsub("%s+$", "")) end
+
+-- Some bindings return (w, h), some return {w=, h=}.
+local function pair(a, b)
+    if type(a) == "table" then return a.w or a[1], a.h or a[2] end
+    return a, b
+end
+
+local function freeTexture(t)
+    if t and t.destroy then pcall(t.destroy, t) end
+end
+
+local function isDirection(a)
+    return a == "up" or a == "down" or a == "left" or a == "right"
+end
+
+function os.capture(cmd, raw)
+    local f = assert(io.popen(cmd, 'r'))
+    local s = assert(f:read('*a'))
+    f:close()
+    if raw then return s end
+    s = string.gsub(s, '^%s+', '')
+    s = string.gsub(s, '%s+$', '')
+    s = string.gsub(s, '[\n\r]+', ' ')
+    return s
+end
+
+local function readBattery()
+    local capacity, err = os.capture("settings get battery")
+    if not err then
+        return tonumber(capacity)
+    end
+    return nil
+end
+
+-- # Lazy loaded sqlite app cache access
+local Catalog = {}
+Catalog.__index = Catalog
+
+local function query(db, sql, ...)
+    local stmt = db:prepare(sql)
+    if not stmt then
+        io.stderr:write("sql error: ", db:errmsg(), "\n  ", sql, "\n")
+        return {}
+    end
+    if select("#", ...) > 0 then stmt:bind_values(...) end
+    local out = {}
+    for r in stmt:nrows() do out[#out + 1] = r end
+    stmt:finalize()
+    return out
+end
+
+local function concatArgs(a, ...)
+    local out = {}
+    for i = 1, #a do out[i] = a[i] end
+    for _, v in ipairs({ ... }) do out[#out + 1] = v end
+    return out
+end
+
+function Catalog.open(path)
+    local db, _, err = sqlite3.open(path)
+    if not db then
+        io.stderr:write("cannot open ", path, ": ", tostring(err), "\n")
+        return nil
+    end
+    db:busy_timeout(5000)
+
+    local self = setmetatable({ db = db, pages = {}, pageClock = 0 }, Catalog)
+
+    -- The scanner will gain `terminal` and `in_favourites` columns later; tolerate their absence.
+    local cols = {}
+    for r in db:nrows("PRAGMA table_info(apps)") do cols[r.name] = true end
+    self.hasFavourites = cols.in_favourites ~= nil
+
+    self.autolaunch = (query(db, "SELECT app_id FROM autolaunch LIMIT 1")[1] or {}).id
+    return self
+end
+
+function Catalog:close() self.db:close() end
+
+local function categoryWhere(name, isFavourites)
+    if isFavourites then return "in_favourites = 1", {} end
+    if name == DEFAULT_CATEGORY then
+        return "(category = ? OR category IS NULL OR category = '')", { DEFAULT_CATEGORY }
+    end
+    return "category = ?", { name }
+end
+
+-- Builds the ordered category list: Favourites, alphabetical, then the pinned-last ones.
+function Catalog:loadCategories()
+    local cats = {}
+
+    if self.hasFavourites then
+        local n = query(self.db, "SELECT COUNT(*) AS n FROM apps WHERE in_favourites = 1")[1].n
+        if n > 0 then
+            local where, args = categoryWhere(FAVOURITES_NAME, true)
+            cats[#cats + 1] = { name = FAVOURITES_NAME, where = where, args = args, count = n, col = 1, rank = 0, sortKey = "" }
+        end
+    end
+
+    local tail = {}
+    for i, name in ipairs(LAST_CATEGORIES) do tail[name:lower()] = i end
+
+    local rows = query(self.db,
+        "SELECT COALESCE(NULLIF(category, ''), ?) AS cat, COUNT(*) AS n FROM apps GROUP BY cat",
+        DEFAULT_CATEGORY)
+    for _, r in ipairs(rows) do
+        local where, args = categoryWhere(r.cat, false)
+        local pinned = tail[r.cat:lower()]
+        cats[#cats + 1] = {
+            name = r.cat, where = where, args = args, count = r.n, col = 1,
+            rank = pinned and 2 or 1,
+            sortKey = pinned and string.format("%04d", pinned) or r.cat:lower(),
+        }
+    end
+
+    table.sort(cats, function(a, b)
+        if a.rank ~= b.rank then return a.rank < b.rank end
+        return a.sortKey < b.sortKey
+    end)
+    for _, c in ipairs(cats) do c.key = c.name end
+    return cats
+end
+
+function Catalog:loadPage(cat, page)
+    local sql = "SELECT id, command, name, description, icon, terminal "
+        .. "FROM apps WHERE " .. cat.where
+        .. " ORDER BY name COLLATE NOCASE, id LIMIT ? OFFSET ?"
+    local args = concatArgs(cat.args, PAGE_SIZE, page * PAGE_SIZE)
+    local rows = query(self.db, sql, unpack(args))
+    for _, r in ipairs(rows) do r.terminal = (r.terminal or 0) ~= 0 end
+    return rows
+end
+
+-- idx is 1-based within the category.
+function Catalog:entry(cat, idx)
+    if not cat or idx < 1 or idx > cat.count then return nil end
+    local page = floor((idx - 1) / PAGE_SIZE)
+    local key = cat.key .. "\0" .. page
+
+    local slot = self.pages[key]
+    if not slot then
+        local n = 0
+        for _ in pairs(self.pages) do n = n + 1 end
+        if n >= MAX_CACHED_PAGES then
+            local oldestKey, oldest
+            for k, s in pairs(self.pages) do
+                if not oldest or s.last < oldest then oldestKey, oldest = k, s.last end
+            end
+            self.pages[oldestKey] = nil
+        end
+        slot = { rows = self:loadPage(cat, page) }
+        self.pages[key] = slot
+    end
+    self.pageClock = self.pageClock + 1
+    slot.last = self.pageClock
+    return slot.rows[(idx - 1) % PAGE_SIZE + 1]
+end
+
+-- Finds where `command` sits (row, col) in the category list. `preferred` is the category the
+-- cursor was in last time (matters for Favourites, where an app appears twice).
+function Catalog:locate(cats, command, preferred)
+    local app = query(self.db, "SELECT id, name FROM apps WHERE command = ?", command)[1]
+    if not app then return nil end
+
+    local function try(cat)
+        local hit = query(self.db, "SELECT 1 AS x FROM apps WHERE id = ? AND (" .. cat.where .. ")", unpack(concatArgs({ app.id }, unpack(cat.args))))[1]
+        if not hit then return nil end
+        local before = query(self.db,
+            "SELECT COUNT(*) AS n FROM apps WHERE (" .. cat.where .. ") AND "
+            .. "(name COLLATE NOCASE < ? OR (name COLLATE NOCASE = ? AND id < ?))",
+            unpack(concatArgs(cat.args, app.name, app.name, app.id)))[1].n
+        return before + 1
+    end
+
+    for r, cat in ipairs(cats) do
+        if cat.name == preferred then
+            local c = try(cat)
+            if c then return r, c end
+        end
+    end
+    for r, cat in ipairs(cats) do
+        local c = try(cat)
+        if c then return r, c end
+    end
+end
+
+function Catalog:toggleAutostart(id)
+    if self.autolaunch == id then
+        local success, _, _ = os.execute("doas app-cache autolaunch --clear")
+        if success then
+            self.autolaunch = nil
+        end
+        return
+    else
+        local success, _, _ = os.execute("doas app-cache autolaunch " .. id)
+        if success then
+            self.autolaunch = id
+        end
+    end
+end
+
+local function formatMetaValue(v)
+    local t = type(v)
+    if t == "string" then v = trim(v); return v ~= "" and v or nil end
+    if t == "number" then return (v == floor(v)) and string.format("%d", v) or tostring(v) end
+    if t == "table" then
+        local parts = {}
+        for _, item in ipairs(v) do
+            local s = formatMetaValue(item)
+            if s then parts[#parts + 1] = s end
+        end
+        return #parts > 0 and table.concat(parts, ", ") or nil
+    end
+    return nil
+end
+
+-- One-line summary like "1996 · Nintendo". Fetched only for the selected entry.
+function Catalog:metaLine(id)
+    if self.metaId == id then return self.metaText end
+    self.metaId, self.metaText = id, nil
+
+    local row = query(self.db, "SELECT json(metadata) AS j FROM apps WHERE id = ?", id)[1]
+    if not row or not row.j then return nil end
+    local ok, meta = pcall(json.decode, row.j)
+    if not ok or type(meta) ~= "table" then return nil end
+
+    local parts = {}
+    for _, key in ipairs(META_FIELDS) do
+        local s = formatMetaValue(meta[key])
+        if s then parts[#parts + 1] = s end
+    end
+    if #parts > 0 then self.metaText = table.concat(parts, "  ·  ") end
+    return self.metaText
+end
+
+---------------------------------------------------------------------------------------------------
+-- Model: cursor state over lazily-loaded categories
+---------------------------------------------------------------------------------------------------
+
+local Model = {}
+Model.__index = Model
+
+function Model.new(catalog)
+    local self = setmetatable({ catalog = catalog, cats = catalog:loadCategories(), row = 1 }, Model)
+    return self
+end
+
+function Model:current() return self.cats[self.row] end
+
+function Model:selected()
+    local cat = self:current()
+    return cat and self.catalog:entry(cat, cat.col)
+end
+
+function Model:move(dx, dy)
+    if #self.cats == 0 then return end
+    self.row = max(1, min(#self.cats, self.row + dy))
+    local cat = self.cats[self.row]
+    cat.col = max(1, min(max(cat.count, 1), cat.col + dx))
+end
+
+---------------------------------------------------------------------------------------------------
+-- Text + icon caches
+---------------------------------------------------------------------------------------------------
+
+local TextCache = {}
+TextCache.__index = TextCache
+
+function TextCache.new(rdr) return setmetatable({ rdr = rdr, items = {}, n = 0 }, TextCache) end
+
+function TextCache:get(fontName, font, str, color)
+    local key = fontName .. "\0" .. colorKey(color) .. "\0" .. str
+    local t = self.items[key]
+    if t ~= nil then return t or nil end
+
+    if self.n >= MAX_CACHED_TEXTS then
+        for _, v in pairs(self.items) do if v then freeTexture(v.tex) end end
+        self.items, self.n = {}, 0
+    end
+
+    local ok, surf = pcall(font.renderUtf8, font, str, "blended", color)
+    if ok and surf then
+        local tex = self.rdr:createTextureFromSurface(surf)
+        local w, h = pair(surf:getSize())
+        if tex then
+            tex:setBlendMode(SDL.blendMode.Blend)
+            t = { tex = tex, w = w, h = h }
+        end
+    end
+    self.items[key] = t or false
+    self.n = self.n + 1
+    return t
+end
+
+local IconCache = {}
+IconCache.__index = IconCache
+
+function IconCache.new(rdr, fallbackPath)
+    local self = setmetatable({ rdr = rdr, slots = {}, count = 0, clock = 0 }, IconCache)
+    self.fallback = self:load(fallbackPath)
+    if not self.fallback then io.stderr:write("Warning: missing fallback icon ", fallbackPath, "\n") end
+    return self
+end
+
+function IconCache:load(path)
+    local ok, surf = pcall(image.load, path)
+    if not ok or not surf then return nil end
+    local w, h = pair(surf:getSize())
+    local tex = self.rdr:createTextureFromSurface(surf)
+    if not tex then return nil end
+    tex:setBlendMode(SDL.blendMode.Blend)
+    return { tex = tex, w = w, h = h }
+end
+
+function IconCache:beginFrame()
+    self.loadsLeft = MAX_ICON_LOADS_PER_FRAME
+    self.pending = false
+end
+
+function IconCache:evictOldest()
+    local oldestPath, oldest
+    for p, s in pairs(self.slots) do
+        if not oldest or s.last < oldest then oldestPath, oldest = p, s.last end
+    end
+    if oldestPath then
+        local s = self.slots[oldestPath]
+        if s.icon then freeTexture(s.icon.tex) end
+        self.slots[oldestPath] = nil
+        self.count = self.count - 1
+    end
+end
+
+function IconCache:get(path)
+    if not path or path == "" then return self.fallback end
+    self.clock = self.clock + 1
+
+    local slot = self.slots[path]
+    if slot then
+        slot.last = self.clock
+        return slot.icon or self.fallback
+    end
+
+    if self.loadsLeft <= 0 then
+        self.pending = true         -- draw fallback now, load on a later frame
+        return self.fallback
+    end
+    self.loadsLeft = self.loadsLeft - 1
+
+    if self.count >= MAX_CACHED_ICONS then self:evictOldest() end
+    slot = { icon = self:load(path) or false, last = self.clock }
+    self.slots[path] = slot
+    self.count = self.count + 1
+    return slot.icon or self.fallback
+end
+
+---------------------------------------------------------------------------------------------------
+-- UI
+---------------------------------------------------------------------------------------------------
+
+local Ui = {}
+Ui.__index = Ui
+
+function Ui.new()
+    local self = setmetatable({}, Ui)
+
+    pcall(SDL.setHint, "SDL_RENDER_SCALE_QUALITY", "linear")
+    local ok, err = pcall(SDL.init, { SDL.flags.Video, SDL.flags.GameController })
+    if not ok then io.stderr:write("SDL.init failed: ", tostring(err), "\n"); return nil end
+    image.init({ image.flags.PNG, image.flags.JPG })
+    ttf.init()
+
+    -- PUPPY_SIZE=720x720 gives a plain window for desktop testing; otherwise fullscreen at the
+    -- panel's native size.
+    local flags, w, h = { SDL.window.FullscreenDesktop }, BASE_W, BASE_H
+    local forced = os.getenv("PUPPY_SIZE")
+    if forced then
+        local fw, fh = forced:match("^(%d+)x(%d+)$")
+        if fw then flags, w, h = {}, tonumber(fw), tonumber(fh) end
+    end
+
+    self.window = SDL.createWindow { title = "Puppy Launcher", width = w, height = h, flags = flags }
+    if not self.window then io.stderr:write("createWindow failed\n"); return nil end
+    self.rdr = SDL.createRenderer(self.window, -1, {})
+    if not self.rdr then io.stderr:write("createRenderer failed\n"); return nil end
+    pcall(SDL.showCursor, false)
+
+    self.W, self.H = pair(self.window:getSize())
+    self:computeLayout()
+
+    local L = self.L
+    self.fonts = {}
+    for name, size in pairs({ ui = 22, title = 34, desc = 20, meta = 18, badge = 14 }) do
+        self.fonts[name] = ttf.open(FONT_FILE, max(8, round(size * L.s)))
+        if not self.fonts[name] then
+            io.stderr:write("Warning: could not load font ", FONT_FILE, "\n")
+            return nil
+        end
+    end
+
+    local ok2, overlay = pcall(image.load, OVERLAY_FILE)
+    if ok2 and overlay then
+        self.overlayTex = self.rdr:createTextureFromSurface(overlay)
+        self.overlayW, self.overlayH = pair(overlay:getSize())
+        if self.overlayTex then self.overlayTex:setBlendMode(SDL.blendMode.Blend) end
+    else
+        io.stderr:write("Warning: could not load ", OVERLAY_FILE, "\n")
+    end
+
+    self.icons = IconCache.new(self.rdr, FALLBACK_ICON)
+    self.texts = TextCache.new(self.rdr)
+    return self
+end
+
+-- Everything derives from one uniform scale so the 640x480 design holds on any panel.
+function Ui:computeLayout()
+    local W, H = self.W, self.H
+    local s = min(W / BASE_W, H / BASE_H)
+    local L = { s = s }
+    L.cellW   = round(192 * s)
+    L.cellH   = round(128 * s)
+    L.gap     = round(32 * s)
+    L.pitchX  = L.cellW + L.gap
+    L.pitchY  = L.cellH + L.gap
+    L.selX    = round(64 * s)
+    L.selY    = round(164 * H / BASE_H)
+    L.headerY = round(9 * s)
+    L.margin  = round(16 * s)
+    L.border  = max(2, round(3 * s))
+    L.sideReserve = round(142 * s)
+    self.L = L
+end
+
+function Ui:rect(color, x, y, w, h)
+    self.rdr:setDrawColor(color)
+    self.rdr:fillRect({ x = x, y = y, w = w, h = h })
+end
+
+function Ui:text(fontName, str, x, y, color, maxW)
+    if not str or str == "" then return 0, 0 end
+    local t = self.texts:get(fontName, self.fonts[fontName], str, color)
+    if not t then return 0, 0 end
+    local w = maxW and min(t.w, maxW) or t.w
+    self.rdr:copy(t.tex, { x = 0, y = 0, w = w, h = t.h }, { x = x, y = y, w = w, h = t.h })
+    return t.w, t.h
+end
+
+function Ui:textWidth(fontName, str)
+    if not str or str == "" then return 0 end
+    local w = pair(self.fonts[fontName]:sizeUtf8(str))
+    return w
+end
+
+function Ui:fontHeight(fontName, basePx)
+    local _, h = pair(self.fonts[fontName]:sizeUtf8("Ag"))
+    return h or round(basePx * self.L.s)
+end
+
+function Ui:wrap(fontName, str, maxW, maxLines)
+    str = str:gsub("%s+", " ")
+    local lines, cur = {}, ""
+    for word in str:gmatch("%S+") do
+        local try = (cur == "") and word or (cur .. " " .. word)
+        if cur == "" or self:textWidth(fontName, try) <= maxW then
+            cur = try
+        else
+            lines[#lines + 1] = cur
+            cur = word
+        end
+    end
+    if cur ~= "" then lines[#lines + 1] = cur end
+
+    if #lines > maxLines then
+        local last = lines[maxLines]
+        while #last > 0 and self:textWidth(fontName, last .. "…") > maxW do
+            last = last:gsub("[%z\1-\127\194-\244][\128-\191]*$", "")
+        end
+        for i = #lines, maxLines + 1, -1 do lines[i] = nil end
+        lines[maxLines] = last .. "…"
+    end
+    return lines
+end
+
+function Ui:drawIcon(icon, x, y)
+    local L = self.L
+    local ew, eh = icon.w * L.s, icon.h * L.s
+    if ew > L.cellW + 0.5 or eh > L.cellH + 0.5 then
+        -- Too big: scale to cover the cell and centre-crop (done on the GPU via the source rect).
+        local scale = max(L.cellW / icon.w, L.cellH / icon.h)
+        local sw = min(icon.w, round(L.cellW / scale))
+        local sh = min(icon.h, round(L.cellH / scale))
+        self.rdr:copy(icon.tex,
+            { x = floor((icon.w - sw) / 2), y = floor((icon.h - sh) / 2), w = sw, h = sh },
+            { x = x, y = y, w = L.cellW, h = L.cellH })
+    else
+        local dw, dh = round(ew), round(eh)
+        self.rdr:copy(icon.tex, { x = 0, y = 0, w = icon.w, h = icon.h },
+            { x = x + floor((L.cellW - dw) / 2), y = y + floor((L.cellH - dh) / 2), w = dw, h = dh })
+    end
+end
+
+function Ui:drawEntry(e, x, y, selected, isAutostart)
+    local L = self.L
+    self:rect(TILE, x, y, L.cellW, L.cellH)
+
+    local icon = self.icons:get(e.icon)
+    if icon then self:drawIcon(icon, x, y) end
+
+    if selected then
+        local b = L.border
+        self:rect(YELLOW, x, y, L.cellW, b)
+        self:rect(YELLOW, x, y + L.cellH - b, L.cellW, b)
+        self:rect(YELLOW, x, y, b, L.cellH)
+        self:rect(YELLOW, x + L.cellW - b, y, b, L.cellH)
+    end
+
+    if isAutostart then
+        local label = "autolaunch"
+        local padX, padY = round(6 * L.s), round(2 * L.s)
+        local tw = self:textWidth("badge", label)
+        local _, th = pair(self.fonts.badge:sizeUtf8(label))
+        th = th or round(14 * L.s)
+        self:rect(YELLOW, x, y, tw + padX * 2, th + padY * 2)
+        self:text("badge", label, x + padX, y + padY, BLACK)
+    end
+end
+
+function Ui:render(model, battery)
+    local rdr, L = self.rdr, self.L
+    rdr:setDrawColor(CLEAR)
+    rdr:clear()
+    self.icons:beginFrame()
+
+    local cats = model.cats
+    local rmin = max(1, model.row + floor((-L.cellH - L.selY) / L.pitchY) + 1)
+    local rmax = min(#cats, model.row + ceil((self.H - L.selY) / L.pitchY) - 1)
+
+    for r = rmin, rmax do
+        local y = L.selY + (r - model.row) * L.pitchY
+        if y < self.H and y + L.cellH > 0 then
+            local cat = cats[r]
+            local cmin = max(1, cat.col + floor((-L.cellW - L.selX) / L.pitchX) + 1)
+            local cmax = min(cat.count, cat.col + ceil((self.W - L.selX) / L.pitchX) - 1)
+            for c = cmin, cmax do
+                local x = L.selX + (c - cat.col) * L.pitchX
+                if x < self.W and x + L.cellW > 0 then
+                    local e = model.catalog:entry(cat, c)
+                    if e then
+                        self:drawEntry(e, x, y, r == model.row and c == cat.col, model.catalog.autolaunch == e.id)
+                    end
+                end
+            end
+        end
+    end
+
+    if self.overlayTex then
+        rdr:copy(self.overlayTex, { x = 0, y = 0, w = self.overlayW, h = self.overlayH }, { x = 0, y = 0, w = self.W, h = self.H })
+    end
+    self:drawLabels(model, battery)
+    rdr:present()
+    return self.icons.pending
+end
+
+function Ui:drawLabels(model, battery)
+    local L = self.L
+    local maxW = self.W - 2 * L.margin
+
+    local cat = model:current()
+    if cat then self:text("ui", cat.name, L.margin, L.headerY, WHITE, maxW) end
+
+    if not battery then battery = 0 end
+    local bat = battery >= 0 and tostring(battery) or "??"
+    self:text("ui", bat, self.W - L.margin - self:textWidth("ui", bat), L.headerY, WHITE)
+
+    local e = model:selected()
+    if not e then return end
+
+    local textW = maxW - L.sideReserve
+    local bottom = self.H - L.margin
+    local y = bottom
+
+    if e.description and e.description ~= "" then
+        local lines = self:wrap("desc", e.description, textW, MAX_DESC_LINES)
+        local lineH = self:fontHeight("desc", 20)
+        for i = #lines, 1, -1 do
+            y = y - lineH
+            self:text("desc", lines[i], L.margin, y, GREY)
+        end
+    end
+
+    local meta = model.catalog:metaLine(e.id)
+    if meta then
+        local metaH = self:fontHeight("meta", 18)
+        y = y - metaH
+        self:text("meta", meta, L.margin, y, YELLOW, textW)
+    end
+
+    local titleH = self:fontHeight("title", 34)
+    self:text("title", e.name, L.margin, y - titleH, WHITE, textW)
+end
+
+---------------------------------------------------------------------------------------------------
+-- Input
+---------------------------------------------------------------------------------------------------
+
+local E = SDL.SDL_event
+
+local function actionFromKey(sym)
+    local K = SDL.key
+    if sym == K.Up then return "up"
+    elseif sym == K.Down then return "down"
+    elseif sym == K.Left then return "left"
+    elseif sym == K.Right then return "right"
+    elseif sym == K.Return then return "launch"
+    elseif sym == K.Space then return "autolaunch" end
+end
+
+local function actionFromButton(b)
+    if b == PAD_UP then return "up"
+    elseif b == PAD_DOWN then return "down"
+    elseif b == PAD_LEFT then return "left"
+    elseif b == PAD_RIGHT then return "right"
+    elseif b == PAD_A then return "launch"
+    elseif b == PAD_Y then return "autolaunch" end
+end
+
+-- Left stick -> direction, with hysteresis so a wobble while springing back doesn't fire.
+local function actionFromStick(x, y, current)
+    local ax, ay = abs(x), abs(y)
+    local dir
+    if ax >= ay then dir = (x < 0) and "left" or "right"
+    else dir = (y < 0) and "up" or "down" end
+    local pushed = max(ax, ay)
+    if current then
+        if dir ~= current and pushed >= STICK_PRESS then return dir end
+        local along = (current == "left" and -x) or (current == "right" and x)
+                   or (current == "up" and -y) or y
+        return (along >= STICK_RELEASE) and current or nil
+    end
+    return (pushed >= STICK_PRESS) and dir or nil
+end
+
+-- Works whether pollEvent() returns an iterator (documented idiom) or an event table.
+local function pollOne()
+    for e in SDL.pollEvent() do return e end
+end
+
+local function waitEvent(timeoutMs)
+    local stop = SDL.getTicks() + timeoutMs
+    while true do
+        local e = pollOne()
+        if e then return e end
+        local left = stop - SDL.getTicks()
+        if left <= 0 then return nil end
+        SDL.delay(min(left, INPUT_POLL_MS))
+    end
+end
+
+local function isRepeat(ev)
+    local r = ev["repeat"]
+    return r and r ~= 0
+end
+
+---------------------------------------------------------------------------------------------------
+-- Launch / state
+---------------------------------------------------------------------------------------------------
+
+local function launch(model, e)
+    local f = io.open(STATE_FILE, "w")
+    if f then
+        f:write(e.command, "\n", model:current().name, "\n")   -- command + which row we were in
+        f:close()
+    end
+    local cmd = "doas appctl launch-application " .. shellQuote(e.command)
+    if e.terminal then cmd = cmd .. " 1" end
+    os.execute(cmd)
+end
+
+local function restoreCursor(model)
+    local f = io.open(STATE_FILE)
+    if not f then return end
+    local command, catName = f:read("*l"), f:read("*l")
+    f:close()
+    if not command or command == "" then return end
+    local r, c = model.catalog:locate(model.cats, command, catName)
+    if r then
+        model.row = r
+        model.cats[r].col = c
+    end
+end
+
+---------------------------------------------------------------------------------------------------
+-- Main
+---------------------------------------------------------------------------------------------------
+
+local function main()
+    local catalog = Catalog.open(DB_PATH)
+    if not catalog then
+        -- os.execute("doas appctl launch-application 'doas app-cache scan' 1")
+    end
+
+    local model = Model.new(catalog)
+    if #model.cats == 0 then
+        io.stderr:write("No entries found in ", DB_PATH, "\n")
+        -- os.execute("doas appctl launch-application 'doas app-cache scan' 1")
+    end
+    restoreCursor(model)
+
+    local ui = Ui.new()
+    if not ui then return 1 end
+
+    local pads = {}
+    local function openPad(i)
+        local ok, p = pcall(function()
+            if SDL.isGameController(i) then return SDL.gameControllerOpen(i) end
+        end)
+        if ok and p then pads[#pads + 1] = p end
+    end
+    pcall(function()
+        for i = 0, SDL.numJoysticks() - 1 do openPad(i) end
+    end)
+
+    local running, dirty = true, true
+    local battery = -2
+    local held, nextRepeat = nil, 0
+    local stickX, stickY, stickDir = 0, 0, nil
+    local nextBatteryCheck = SDL.getTicks() + IDLE_CHECK_MS
+
+    local function perform(action)
+        if action == "up" then model:move(0, -1)
+        elseif action == "down" then model:move(0, 1)
+        elseif action == "left" then model:move(-1, 0)
+        elseif action == "right" then model:move(1, 0)
+        elseif action == "autolaunch" then
+            local e = model:selected()
+            if e then catalog:toggleAutostart(e.id) end
+        elseif action == "launch" then
+            held = nil
+            local e = model:selected()
+            if e then launch(model, e) end
+        end
+        if action then dirty = true end
+    end
+
+    local function handle(ev)
+        local action
+        local t = ev.type
+        if t == SDL.event.ControllerDeviceAdded then
+            openPad(ev.which)
+            return
+        end
+        if t == SDL.event.Quit then
+            running = false
+        elseif SDL.event.WindowExposed and t == SDL.event.WindowExposed then
+            dirty = true
+        elseif t == SDL.event.KeyDown then
+            if not isRepeat(ev) then action = actionFromKey(ev.keysym.sym) end
+        elseif t == SDL.event.KeyUp then
+            if actionFromKey(ev.keysym.sym) == held then held = nil end
+        elseif t == SDL.event.ControllerButtonDown then
+            print("Button " .. tostring(ev.button))
+            action = actionFromButton(ev.button)
+        elseif t == SDL.event.ControllerButtonUp then
+            if actionFromButton(ev.button) == held then held = nil end
+        elseif t == SDL.event.ControllerAxisMotion then
+            if ev.axis == AXIS_LEFTX then stickX = ev.value
+            elseif ev.axis == AXIS_LEFTY then stickY = ev.value
+            else return end
+            local dir = actionFromStick(stickX, stickY, stickDir)
+            if dir ~= stickDir then
+                if held == stickDir then held = nil end   -- the stick was driving the repeat
+                stickDir = dir
+                action = dir                              -- nil on release
+            end
+        end
+
+        if isDirection(action) then
+            held = action
+            nextRepeat = SDL.getTicks() + REPEAT_DELAY_MS
+        end
+        perform(action)
+    end
+
+    while running do
+        if dirty then
+            battery = readBattery()
+            dirty = ui:render(model, battery)   -- stays dirty while icons are still streaming in
+        end
+
+        local now = SDL.getTicks()
+        local timeout = max(0, nextBatteryCheck - now)
+        if dirty then timeout = 0 end
+        if held then timeout = min(timeout, max(0, nextRepeat - now)) end
+
+        local ev = waitEvent(timeout)
+        if ev then
+            while ev and running do
+                handle(ev)
+                ev = pollOne()
+            end
+        else
+            now = SDL.getTicks()
+            if held and now >= nextRepeat then
+                nextRepeat = now + REPEAT_RATE_MS
+                perform(held)
+            elseif now >= nextBatteryCheck then
+                nextBatteryCheck = now + IDLE_CHECK_MS
+                if readBattery() ~= battery then dirty = true end
+            end
+        end
+    end
+
+    pads = nil   -- prevent `pads` from being garbage collected
+    catalog:close()
+    SDL.quit()
+    return 0
+end
+
+os.exit(main())

@@ -5,10 +5,13 @@ TARGET_DIR=$1
 INITTAB="${TARGET_DIR}/etc/inittab"
 
 # Add USB serial gadget console if it doesn't already exist
-if ! grep -q "^ttyGS0" "$INITTAB"; then
+if ! grep -q "^::respawn:/usr/sbin/ttyGS0-getty" "$INITTAB"; then
     echo "" >> "$INITTAB"
-    echo "# USB Gadget Serial - Standard login" >> "$INITTAB"
-    echo "ttyGS0::respawn:/sbin/getty -L ttyGS0 115200 vt100" >> "$INITTAB"
+    echo "# USB Gadget Serial Getty Launcher" >> "$INITTAB"
+    # we launch getty on ttyGS0 through a script because our `ttyGS0-getty` script can
+    # check to see if /dev/ttyGS0 even exists before trying to put getty on it.
+    # This prevents getty from spamming the console with `file not found` errors every second.
+    echo "::respawn:/usr/sbin/ttyGS0-getty" >> "$INITTAB"
 fi
 
 # Disable default getty on tty1

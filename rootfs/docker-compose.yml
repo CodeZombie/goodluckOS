@@ -8,4 +8,6 @@ services:
       - ./configs:/src/configs:z
       - ./package:/src/package:ro,z
       - ./out:/src/out:z
+      - ./dl:/src/dl:z
+      - ./ccache:/src/ccache:z
     command: sh -c "/src/scripts/configure.sh && tail -f /dev/null"

@@ -1,3 +1,10 @@
+[LAUNCHER]
+NAME=Puppy
+DESCRIPTION=A simple application launcher for goodluckOS
+COMMAND=/usr/local/bin/puppy
+VERSION=2.0.0
+AUTHOR=Jeremy Clark
+
 [ENTRY]
 CATEGORY=System
 NAME=Reboot
@@ -23,7 +30,14 @@ ICON=/usr/share/icons/eject-tf2.png
 CATEGORY=System
 NAME=System Settings
 DESCRIPTION=Modify your system's settings
-COMMAND=system-settings
+COMMAND=settings-gui
+ICON=/usr/share/icons/system-settings.png
+
+[ENTRY]
+CATEGORY=System
+NAME=Application Manager
+DESCRIPTION=Install and uninstall applications
+COMMAND=application-manager
 ICON=/usr/share/icons/system-settings.png
 
 [ENTRY]
@@ -31,6 +45,14 @@ CATEGORY=System
 NAME=Resize Home
 DESCRIPTION=Resize your HOME partition
 COMMAND=resize-home
+ICON=/usr/share/icons/resize-home.png
+
+[ENTRY]
+CATEGORY=System
+NAME=Scan
+DESCRIPTION=Scan your system for app/games/roms
+COMMAND=app-cache scan
+TERMINAL=1
 ICON=/usr/share/icons/resize-home.png
 
 [ENTRY]
@@ -47,6 +69,14 @@ NAME=Credits
 DESCRIPTION=Learn about the people who made goodluckOS
 COMMAND=credits /usr/share/credits/credits.ini
 ICON=/usr/share/icons/credits.png
+
+[ENTRY]
+CATEGORY=Terminal
+NAME=View Env
+DESCRIPTION=View the current environment variables
+TERMINAL=1
+COMMAND=doas evsieve --input /dev/input/event2 grab --map btn:dpad_up key:up --map btn:dpad_down key:down --output repeat=enable & printenv | less
+
 
 [ENTRY]
 CATEGORY=Terminal

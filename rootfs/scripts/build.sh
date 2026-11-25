@@ -1,4 +1,4 @@
 #!/usr/bin/env bash
 echo "[*] Starting build..."
 echo "[*] Note: You can use this script to rebuild specific packages. (eg. ./scripts/build.sh puppy-rebuild)"
-make -C buildroot O="/src/out" BR2_EXTERNAL="/src" BR2_DL_DIR="/src/dl" "$@"
+make -C buildroot O="/src/out" BR2_EXTERNAL="/src" BR2_DL_DIR="/src/dl" BR2_CCACHE_DIR="/src/ccache" "$@"

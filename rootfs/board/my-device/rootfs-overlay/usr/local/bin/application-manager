@@ -1,0 +1,115 @@
+#!/usr/bin/env luajit
+local menui = require("menui")
+local lfs = require("lfs")
+
+local DEFAULT_DIR = "/home/player"
+
+local directory_cache = {
+    directory = nil,
+    contents = nil
+}
+local function sort_inodes(inodes)
+    table.sort(inodes, function(a, b)
+        -- Sort by file type and file name (alphanumeric)
+        if a.type ~= b.type then
+            return a.type == "directory"
+        end
+
+        local path_a = a.relative_path:lower()
+        local path_b = b.relative_path:lower()
+
+        if path_a ~= path_b then
+            return path_a < path_b
+        end
+
+        return a.relative_path < b.relative_path
+    end)
+    return inodes
+end
+
+local function get_directory_contents(directory)
+    if directory_cache.directory == directory then
+        return directory_cache.contents
+    else
+        directory_cache.directory = directory
+        directory_cache.contents = {}
+        for node in lfs.dir(directory_cache.directory) do
+            local absolute_path = directory_cache.directory .. "/" .. node
+            local attr = lfs.attributes(absolute_path)
+            local entry = { relative_path = node, absolute_path = absolute_path, bytes=attr.size, permissions=attr.permissions, uid=attr.uid, gid=attr.gid, access=attr.access, modification=attr.modification }
+            if attr and attr.mode == "file" then
+                entry.type = "file"
+            else
+                entry.type = "directory"
+            end
+            table.insert(directory_cache.contents, entry)
+        end
+    end
+    directory_cache.contents = sort_inodes(directory_cache.contents)
+    return directory_cache.contents
+end
+
+menui:start("Application Manager", function()
+    menui:page("Application Manager", {on_render=function()
+        menui:button("install-button", {label="Install", icon='🔧', on_a_press=function()
+            menui:push_page("File Browser", { current_directory = DEFAULT_DIR })
+        end})
+
+        menui:button("uninstall-button", {label="Uninstall", icon='🗑️', on_a_press=function()
+
+        end})
+    end})
+
+    menui:page("File Browser", {on_render=function(context)
+        menui:label("_$file-browser-label", {label="Current Directory Label", label=context.current_directory .. "/", align="center"})
+        for _, node in ipairs(get_directory_contents(context.current_directory)) do
+            if node.relative_path ~= "." then
+                if node.type == "directory" then
+                    menui:button(node.relative_path, {
+                        label = node.relative_path,
+                        align = "right",
+                        icon = "📂",
+                        on_a_press_description = "Browse",
+                        on_a_press = function()
+                            menui:push_page("File Browser", {hide_name=true, current_directory=node.absolute_path})
+                        end,
+                        on_y_press_description = "Info",
+                        on_y_press = function()
+                            menui:push_page("Node Info", {name="Directory Info", node=node})
+                        end,
+                    })
+                else
+                    menui:button(node.relative_path, {
+                        label = node.relative_path,
+                        align = "right",
+                        icon = "📄",
+                        on_a_press_description = "Install",
+                        on_a_press = function()
+                            menui:push_page("Install", {selected_file=node.absolute_path})
+                        end,
+                        on_y_press_description = "Info",
+                        on_y_press = function()
+                            menui:push_page("Node Info", {name="File Info", node=node})
+                        end,
+                    })
+                end
+            end
+        end
+    end})
+
+    menui:page("Install", {on_render=function(context)
+        menui:label("are-you-sure", {label=string.format("Are you sure you want to install %s", context.selected_file), icon='⚠️'})
+        menui:button("install-button", {label="Install", icon='🔧', on_a_press=function() print("installing...") end})
+        menui:button("back", {label="Back", on_a_press=function() menui:pop_page() end})
+    end})
+
+    menui:page("Node Info", {on_render=function(context)
+        menui:select("file", { label = "File", value = context.node.absolute_path })
+        menui:select("size", { label = "Size", value = context.node.bytes, value_string_format="%s bytes" })
+        menui:select("permissions", { label = "Permissions", value = context.node.permissions })
+        menui:select("last-accessed", { label = "Last Accessed", value = context.node.access })
+        menui:select("last-modified", { label = "Last Modified", value = context.node.modification })
+        menui:select("uid", { label = "UID", value = context.node.uid})
+        menui:select("gid", { label = "GID", value = context.node.gid })
+    end})
+end)

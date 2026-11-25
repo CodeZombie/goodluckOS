@@ -1,0 +1,173 @@
+#!/usr/bin/env luajit
+
+local menui = require("menui")
+local settings = require("libsettings")
+
+-- get and cache current setting values
+for _, setting in pairs(settings.settings) do
+    -- we're going to give `setting` a new key, 'value' to act as a cached copy of whatever 'get' returns.
+    -- This is going to be very useful for our immediate mode renderer, which needs to read the setting value almost constantly.
+    -- We just have to make sure we manually update `setting.value` whenever we change the setting.
+    -- Some settings will naturally change on their own though (like time->minutes)
+    -- In those cases we should have some timer periodically updating the cached value in the background and then call `menui:render()`
+    setting.value = setting:get()
+end
+
+local setting_error = ""
+
+local Context = {
+    tf2_mounted = true
+}
+
+local function menui_element_from_setting(setting)
+    if setting.type == "int" then
+        menui:number(setting.name, {
+            label = setting.name,
+            value = setting.value,
+            min = setting.min,
+            max = setting.max,
+            on_change = function(new_value)
+                local set_value, err = settings.set(setting.id, new_value)
+                if err then
+                    setting_error = err
+                    menui:push_page("Error")
+                else
+                    setting.value = set_value
+                end
+            end
+        })
+    elseif setting.type == "bool" then
+        menui:bool(setting.name, {
+            label = setting.name,
+            value = setting.value,
+            on_change = function(new_value)
+                local set_value, err = settings.set(setting.id, new_value)
+                if err then
+                    setting_error = err
+                    menui:push_page("Error")
+                else
+                    setting.value = set_value
+                end
+            end,
+        })
+    elseif setting.type == "select" then
+        menui:select(setting.name, {
+            label = setting.name,
+            value = setting.value,
+            options = setting.options,
+            on_change = function(_, new_value)
+                local set_value, err = settings.set(setting.id, new_value)
+                if err then
+                    setting_error = err
+                    menui:push_page("Error")
+                else
+                    setting.value = set_value
+                end
+            end
+        })
+    end
+end
+
+local setting_ids = { "volume", "mute", "brightness", "low_battery_alert", "language" }
+
+menui:start("Settings", function()
+    menui:page("main-page", {
+        label="Settings",
+        on_render = function()
+
+            menui:button("power-page-button", {
+                label = "Power",
+                icon = '>',
+                on_a_press_description="View Power Settings",
+                on_a_press = function()
+                    menui:push_page("power-page")
+                end,
+            })
+
+            menui:button("storage-page-button", {
+                label = "Storage",
+                icon = '>',
+                on_a_press_description="View Storage Settings",
+                on_a_press = function()
+                    menui:push_page("storage-page")
+                end,
+            })
+
+            for _, setting_id in ipairs(setting_ids) do
+                menui_element_from_setting(settings.settings[setting_id])
+            end
+        end,
+    })
+
+    menui:page("Error", {
+        on_render=function()
+            menui:label("error-label", { label = setting_error, align="right", icon="⚠️" })
+            menui:button("back-button", {
+                label = "Back",
+                on_a_press_description = "Go back",
+                on_a_press = function ()
+                    menui:pop_page()
+                end
+            })
+        end
+    })
+
+    menui:page("Storage", {
+        on_render=function()
+            if Context.tf2_mounted then
+                menui:button("unmount-tf2-button", {
+                    label = "Unmount TF2",
+                    on_a_press_description = "Unmount TF2",
+                    on_a_press = function()
+                        print("Unmount TF2")
+                    end
+                })
+            else
+                menui:button("mount-tf2-button", {
+                    label = "Mount TF2",
+                    on_a_press_description = "Mount TF2",
+                    on_a_press = function()
+                        print("Mount TF2")
+                    end
+                })
+            end
+
+            menui:button("resize-home-button", {
+                label = "Resize HOME partition",
+                on_a_press_description = "Resize HOME",
+                on_a_press = function()
+                    print("Resize Home")
+                end
+            })
+        end,
+    })
+
+    menui:page("Storage", {
+        on_render=function()
+            menui:button("power-off-button", {
+                label = "Power Off",
+                on_a_press_description = "Power off the device",
+                on_a_press = function()
+                    print("poweroff")
+                end
+            })
+            menui:button("reboot-button", {
+                label = "Reboot",
+                on_a_press_description = "Reboot the device",
+                on_a_press = function()
+                    print("reboot")
+                end
+            })
+        end,
+    })
+
+    menui:page("date-and-time-page", {
+        label="Date & Time",
+        on_render=function()
+            local date_setting_ids = { "date-day", "date-month", "date-year", "time-hour", "time-minute", "time-second" }
+            for _, setting_id in ipairs(date_setting_ids) do
+                menui_element_from_setting(settings.get(setting_id))
+            end
+        end,
+    })
+end)

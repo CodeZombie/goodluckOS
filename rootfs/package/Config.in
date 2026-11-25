@@ -11,4 +11,6 @@ source "../package/evsieve/Config.in"
 source "../package/credits/Config.in"
 source "../package/glos-setup/Config.in"
 source "../package/dsperate/Config.in"
+source "../package/ini-lua/Config.in"
+source "../package/menui/Config.in"
 endmenu

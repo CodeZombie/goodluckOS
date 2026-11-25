@@ -1,0 +1,15 @@
+services:
+  tests:
+    build: .
+    volumes:
+      - ${KERNEL_PATH:?set KERNEL_PATH in .env}:/inputs/kernel:ro,z
+      - ${ROOTFS_TAR:?set ROOTFS_TAR in .env}:/inputs/rootfs.tar:ro,z
+      - ./:/tests:z            # tests + results/ (serial logs) land on the host
+    environment:
+      KERNEL_IMG: /inputs/kernel
+      ROOTFS_FREE_MB: "256"   # free space added to the ext4 image
+      LOGIN_USER: root
+      LOGIN_PASSWORD: root
+      LOGIN_PATTERN: "goodluckOS login: "
+      SHELL_PROMPT: "# "
+      BOOT_TIMEOUT: 360

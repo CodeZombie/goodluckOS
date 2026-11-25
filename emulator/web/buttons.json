@@ -1,0 +1,19 @@
+{
+  "title": "goodluckOS",
+  "note": "Each entry maps an on-screen button to a keyboard key (KeyboardEvent.code). The guest sees these as keyboard presses, so match them to what your OS's input layer expects.",
+  "buttons": {
+    "up":     { "label": "▲", "code": "ArrowUp" },
+    "down":   { "label": "▼", "code": "ArrowDown" },
+    "left":   { "label": "◀", "code": "ArrowLeft" },
+    "right":  { "label": "▶", "code": "ArrowRight" },
+    "a":      { "label": "A", "code": "KeyZ" },
+    "b":      { "label": "B", "code": "KeyX" },
+    "x":      { "label": "X", "code": "KeyA" },
+    "y":      { "label": "Y", "code": "KeyS" },
+    "l":      { "label": "L", "code": "KeyQ" },
+    "r":      { "label": "R", "code": "KeyW" },
+    "start":  { "label": "Start",  "code": "Enter" },
+    "select": { "label": "Select", "code": "ShiftRight" },
+    "menu":   { "label": "Menu",   "code": "Escape" }
+  }
+}

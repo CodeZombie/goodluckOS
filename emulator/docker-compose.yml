@@ -1,0 +1,17 @@
+services:
+  emulator:
+    build: .
+    env_file: .env
+    volumes:
+      - ${KERNEL_PATH:?set KERNEL_PATH in .env}:/inputs/kernel:ro,z
+      - ${ROOTFS_TAR:?set ROOTFS_TAR in .env}:/inputs/rootfs.tar:ro,z
+      - ./web:/opt/web:ro,Z
+      - ./:/tests:z            # tests + results/ (serial logs) land on the host
+    ports:
+      - "5900:5900"
+      - "127.0.0.1:${WEB_PORT:-8080}:8080"
+    devices:
+      - "/dev/dri/renderD128:/dev/dri/renderD128"
+    environment:
+      KERNEL_IMG: /inputs/kernel
+      ROOTFS_FREE_MB: "256"   # free space added to the ext4 image

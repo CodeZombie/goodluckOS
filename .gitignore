@@ -1,10 +1,11 @@
 home/out/*
 home/staging/*
 image/out/*
+image/staging/*
+image/sdcard.img
 kernel/out/*
 rootfs/out/*
-image/sdcard.img
-image/staging/*
+rootfs/dl/*
+rootfs/ccache/*
 rootfs/package/*/local-out/*
-rootfs/package/*/imgui
 rootfs/package/puppy/puppy

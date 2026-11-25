@@ -1,390 +1,758 @@
-#!/bin/sh
-#
-# /usr/local/bin/appctl  --  launcher / application supervisor
-#
-# Guarantees that the launcher cgroup and the application cgroup are never
-# populated at the same time. Both are tracked as cgroup-v2 groups, never as
-# bare PIDs, so double-forking apps and PID reuse can't confuse it.
-#
-# Usage:
-#   appctl start | stop | restart | status
-#   appctl launch-application "<shell command string>" [TERMINAL_MODE]
-#       TERMINAL_MODE = 1 : the app gets the console ($CONSOLE, tty1) as stdin,
-#                           stdout and stderr AND as its controlling terminal.
-#                           Use for less, vim, shells, ncurses apps. Not logged.
-#       anything else     : normal launch. stdin is /dev/null, stdout/stderr go to
-#                           /dev/shm/application/application.log
-#   appctl stop-application      SIGTERM to everything in the application cgroup
-#   appctl kill-application      SIGKILL to everything in the application cgroup
-#   appctl daemon          (foreground; for use with ::respawn: in inittab)
-#
-# Design notes:
-#   * The daemon is the ONLY thing that touches cgroups / starts processes.
-#     CLI verbs just drop a one-line request into a FIFO. This matters because
-#     `launch-application` is normally called *from the launcher*, which lives
-#     in the cgroup that is about to be killed. Doing the kill from the caller
-#     would kill the caller mid-operation.
-#   * Every spawned process gets a generation number. Exit events from a
-#     previous generation (e.g. the launcher we just killed on purpose) are
-#     ignored instead of triggering a bogus restart.
-#   * Processes enter their cgroup BEFORE exec, so there is no window where a
-#     fork can escape.
+#!/usr/bin/env luajit
+--
+-- /usr/local/bin/appctl  --  launcher / application supervisor
+--
+-- Guarantees that the launcher cgroup and the application cgroup are never
+-- populated at the same time. Both are tracked as cgroup-v2 groups, never as
+-- bare process ids, so double-forking apps and pid reuse can't confuse it.
+--
+-- Usage:
+--   appctl start | stop | restart | status
+--   appctl launch-application "<shell command string>" [TERMINAL_MODE]
+--       TERMINAL_MODE = 1 : the app gets the console as stdin, stdout and
+--                           stderr AND as its controlling terminal.
+--                           Use for less, vim, shells, ncurses apps. Not logged.
+--       anything else     : normal launch. stdin is /dev/null, stdout/stderr go
+--                           to /dev/shm/application/application.log
+--   appctl stop-application      SIGTERM to everything in the application cgroup
+--   appctl kill-application      SIGKILL to everything in the application cgroup
+--   appctl daemon                (foreground; for use with ::respawn: in inittab)
+--
+-- Design notes:
+--   * The daemon is the ONLY thing that touches cgroups / starts processes.
+--     CLI verbs just drop a one-line request into a FIFO. This matters because
+--     `launch-application` is normally called *from the launcher*, which lives
+--     in the cgroup that is about to be killed. Doing the kill from the caller
+--     would kill the caller mid-operation.
+--   * Only one thing (the launcher OR the application) ever runs at a time, so
+--     the daemon keeps a single `Supervisor.current` record. Every spawned
+--     process gets a generation number. Exit events from a previous generation
+--     (e.g. the launcher we just killed on purpose) are ignored instead of
+--     triggering a bogus restart.
+--   * Each spawn forks a small "watcher" process. The watcher forks the real
+--     worker, waits for it, then reports the exit back through the FIFO. The
+--     watcher also implements the crash-loop throttle (it sleeps before
+--     reporting a launcher that died too quickly).
+--   * Workers enter their cgroup BEFORE exec, so there is no window where a
+--     fork can escape.
 
-PATH=/sbin:/bin:/usr/sbin:/usr/bin
+local argparse = require("argparse")
+local posix = require("posix")
+local stat = require("posix.sys.stat")
+local libappcachedb = require("libappcachedb")
 
-# ----------------------------------------------------------------- config ---
-RUN_USER=player
-LAUNCHER_CMD=/home/player/.local/launcher.sh
-AUTOLAUNCH=/home/player/autolaunch
-CONSOLE=/dev/tty1                 # where the "loading" screen is drawn
-RUN_DIR=/run/appd                 # FIFO + pidfile (use /dev/shm/appd if no /run)
-LOG_DIR=/dev/shm/application
-APP_LOG=$LOG_DIR/application.log
-LAUNCHER_LOG=$LOG_DIR/launcher.log
-CG_MOUNT=/sys/fs/cgroup
-CG_ROOT=$CG_MOUNT/appd
-MIN_LAUNCHER_UPTIME=5             # launcher dying faster than this is "crashing"
-RESTART_DELAY=1                   # seconds to wait before respawning a crasher
-TTY_WRAPPER="setsid -c"           # terminal mode: makes stdin the controlling tty.
-                                  # If your BusyBox lacks `setsid -c`, try "setsid cttyhack"
+-- ============================================================================
+-- Configuration
+-- ============================================================================
 
-# optional overrides
-[ -r /etc/default/appd ] && . /etc/default/appd
-
-FIFO=$RUN_DIR/control
-PIDFILE=$RUN_DIR/appd.pid
-SELF=$(readlink -f "$0")
-
-# ---------------------------------------------------------------- helpers ---
-log() {
-    { echo "appd: $*" >/dev/kmsg; } 2>/dev/null || echo "appd: $*" >&2
+local Configuration = {
+    RUN_USER = "player",
+    CONSOLE_PATH = "/dev/tty1",
+    RUN_DIRECTORY = "/run/appd",
+    LOG_DIRECTORY = "/dev/shm/application",
+    CGROUP_MOUNT_POINT = "/sys/fs/cgroup",
+    SPLASH_SCREEN_PATH = "/tmp/loading-splash-screen.txt",
+    DEFAULT_LAUNCHER_COMMAND = "/usr/local/bin/puppy",
+    MINIMUM_LAUNCHER_UPTIME_SECONDS = 5,
+    RESTART_DELAY_SECONDS = 1,
 }
 
-init_timing() {
-    if sleep 0.1 2>/dev/null; then PER_SEC=10; else PER_SEC=1; fi
-}
+Configuration.APPLICATION_LOG_PATH = Configuration.LOG_DIRECTORY .. "/application.log"
+Configuration.LAUNCHER_LOG_PATH = Configuration.LOG_DIRECTORY .. "/launcher.log"
+Configuration.CGROUP_ROOT = Configuration.CGROUP_MOUNT_POINT .. "/appd"
+Configuration.FIFO_PATH = Configuration.RUN_DIRECTORY .. "/control"
+Configuration.PID_FILE_PATH = Configuration.RUN_DIRECTORY .. "/appd.pid"
 
-nap() { sleep 0.1 2>/dev/null || sleep 1; }
+local ROLE_LAUNCHER = "launcher"
+local ROLE_APPLICATION = "app"
 
-uptime_s() { read -r _up _ </proc/uptime; echo "${_up%%.*}"; }
+local STANDARD_INPUT = 0
+local STANDARD_OUTPUT = 1
+local STANDARD_ERROR = 2
 
-daemon_running() {
-    [ -r "$PIDFILE" ] || return 1
-    read -r _pid <"$PIDFILE" 2>/dev/null || return 1
-    [ -n "$_pid" ] && kill -0 "$_pid" 2>/dev/null
-}
+local TERMINAL_CLEAR_SCREEN_AND_HIDE_CURSOR = "\027[2J\027[H\027[?25l"
+local TERMINAL_SHOW_CURSOR = "\027[?25h"
 
-# one line -> daemon. Never blocks forever if the daemon is wedged/absent.
-send() {
-    daemon_running || { echo "appd: daemon is not running" >&2; return 1; }
-    case $1 in
-        *'
-'*) echo "appd: newlines are not allowed in commands" >&2; return 1 ;;
-    esac
-    [ "${#1}" -lt 4000 ] || { echo "appd: request too long" >&2; return 1; }
-    if command -v timeout >/dev/null 2>&1; then
-        timeout 3 sh -c 'printf "%s\n" "$1" >"$2"' sh "$1" "$FIFO"
+-- ============================================================================
+-- Utilities
+-- ============================================================================
+
+local Utilities = {}
+
+function Utilities.log(format_string, ...)
+    local message = string.format("appd: " .. format_string, ...)
+    local kernel_log = io.open("/dev/kmsg", "a")
+
+    if kernel_log then
+        kernel_log:write(message .. "\n")
+        kernel_log:close()
     else
-        printf '%s\n' "$1" >"$FIFO"
-    fi
+        -- io.stderr:write(message .. "\n")
+    end
+end
+
+function Utilities.pause_briefly()
+    posix.nanosleep(0, 100000000) -- 0.1 seconds
+end
+
+-- Wraps text in single quotes so a shell treats it as one literal word.
+function Utilities.shell_quote(text)
+    local escaped_text = text:gsub("'", "'\\''")
+    return "'" .. escaped_text .. "'"
+end
+
+function Utilities.read_file(path)
+    local file = io.open(path, "r")
+    if not file then
+        return nil
+    end
+
+    local contents = file:read("*a")
+    file:close()
+    return contents
+end
+
+-- Returns true only if the data really reached the file. Errors from
+-- buffered writes (for example a rejected write to cgroup.procs) are only
+-- reported when the file is closed, so the result of close() matters.
+function Utilities.write_file(path, contents)
+    local file = io.open(path, "w")
+    if not file then
+        return false
+    end
+
+    file:write(contents)
+    return file:close() ~= nil
+end
+
+-- Creates the file if needed, empties it, and makes it world-readable.
+function Utilities.reset_file(path)
+    local file = io.open(path, "w")
+    if file then
+        file:close()
+    end
+    stat.chmod(path, tonumber("644", 8))
+end
+
+-- Like `mkdir -p`. Only absolute paths are supported.
+function Utilities.make_directories(path)
+    local partial_path = ""
+
+    for path_component in path:gmatch("[^/]+") do
+        partial_path = partial_path .. "/" .. path_component
+        posix.mkdir(partial_path) -- harmless failure when it already exists
+    end
+end
+
+function Utilities.read_daemon_process_id()
+    local pid_file = io.open(Configuration.PID_FILE_PATH, "r")
+    if not pid_file then
+        return nil
+    end
+
+    local process_id = pid_file:read("*n")
+    pid_file:close()
+    return process_id
+end
+
+-- Checks /proc instead of sending signal 0, because kill() fails with EPERM
+-- when the caller isn't root, even though the process exists. The launcher
+-- (running as RUN_USER) calls appctl, so it has to work for non-root callers.
+function Utilities.is_daemon_running()
+    local process_id = Utilities.read_daemon_process_id()
+    if process_id == nil or process_id <= 0 then
+        return false
+    end
+
+    local process_status_file = io.open(string.format("/proc/%d/stat", process_id), "r")
+    if process_status_file == nil then
+        return false
+    end
+
+    process_status_file:close()
+    return true
+end
+
+function Utilities.send_to_daemon(message)
+    if not Utilities.is_daemon_running() then
+        io.stderr:write("appd: daemon is not running\n")
+        os.exit(1)
+    end
+
+    if message:find("\n") then
+        io.stderr:write("appd: newlines are not allowed in commands\n")
+        os.exit(1)
+    end
+
+    local fifo = io.open(Configuration.FIFO_PATH, "a")
+    if not fifo then
+        io.stderr:write("appd: failed to write to FIFO\n")
+        os.exit(1)
+    end
+
+    fifo:write(message .. "\n")
+    fifo:close()
+end
+
+-- ============================================================================
+-- App database (queried through the sqlite3 command line tool)
+-- ============================================================================
+
+local Database = {}
+
+-- Runs a query and returns the first line of output as a table, or `default` if an error occurs.
+function Database.query_first_row(sql_query, default_table)
+    local db, err = libappcachedb.open()
+    if err then
+        db:close()
+        Utilities.log("Failed to open database: %s", err)
+        return default_table
+    end
+
+    local ok, iter, state, init_val = pcall(db.connection.nrows, db.connection, sql_query)
+    if not ok then
+        db:close()
+        Utilities.log("SQL Error: %s\nSQL: %s", tostring(iter), sql_query)
+        return default_table
+    end
+
+    local step_ok, first_row = pcall(iter, state, init_val)
+    if not step_ok then
+        db:close()
+        Utilities.log("Runtime SQL Error: %s\nSQL: %s", tostring(first_row), sql_query)
+        return default_table
+    end
+
+    if not first_row then
+        first_row = default_table
+    end
+
+    db:close()
+    return first_row
+end
+
+function Database.ensure_app_cache_exists()
+    local file_info = stat.stat(libappcachedb.DB_PATH)
+
+    if file_info == nil or file_info.size == 0 then
+        print("No app cache detected. Scanning for apps. Please wait...")
+        os.execute("doas app-cache scan")
+    end
+end
+
+-- ============================================================================
+-- Control group management
+-- ============================================================================
+
+local ControlGroup = {}
+
+function ControlGroup.directory_for(role)
+    return Configuration.CGROUP_ROOT .. "/" .. role
+end
+
+function ControlGroup.setup()
+    local mounts = Utilities.read_file("/proc/mounts") or ""
+
+    if not mounts:find(" cgroup2 ", 1, true) then
+        os.execute(string.format("mount -t cgroup2 none %s", Utilities.shell_quote(Configuration.CGROUP_MOUNT_POINT)))
+    end
+
+    Utilities.make_directories(ControlGroup.directory_for(ROLE_LAUNCHER))
+    Utilities.make_directories(ControlGroup.directory_for(ROLE_APPLICATION))
+end
+
+function ControlGroup.is_populated(directory)
+    local process_list = io.open(directory .. "/cgroup.procs", "r")
+    if not process_list then
+        return false
+    end
+
+    local first_process_id = process_list:read("*l")
+    process_list:close()
+
+    return first_process_id ~= nil and first_process_id ~= ""
+end
+
+function ControlGroup.send_signal(directory, signal_number)
+    local process_list = io.open(directory .. "/cgroup.procs", "r")
+    if not process_list then
+        return
+    end
+
+    for process_id in process_list:lines() do
+        posix.kill(tonumber(process_id), signal_number)
+    end
+    process_list:close()
+end
+
+-- SIGKILLs everything in the group and waits (up to 5 seconds) for it to empty.
+function ControlGroup.stop(directory)
+    local remaining_attempts = 50 -- 50 * 0.1 seconds
+
+    while ControlGroup.is_populated(directory) and remaining_attempts > 0 do
+        -- cgroup.kill kills the whole group atomically. Older kernels lack it,
+        -- so fall back to signalling each process.
+        if not Utilities.write_file(directory .. "/cgroup.kill", "1\n") then
+            ControlGroup.send_signal(directory, posix.SIGKILL)
+        end
+
+        Utilities.pause_briefly()
+        remaining_attempts = remaining_attempts - 1
+    end
+
+    if ControlGroup.is_populated(directory) then
+        Utilities.log("WARNING: %s still populated (D-state task?)", directory)
+    end
+end
+
+function ControlGroup.stop_all()
+    ControlGroup.stop(ControlGroup.directory_for(ROLE_LAUNCHER))
+    ControlGroup.stop(ControlGroup.directory_for(ROLE_APPLICATION))
+end
+
+-- Stops everything and removes every trace of the daemon from the filesystem.
+-- Used by both the daemon's own shutdown and the `stop` CLI command.
+local function tear_down_runtime_state()
+    ControlGroup.stop_all()
+
+    posix.rmdir(ControlGroup.directory_for(ROLE_LAUNCHER))
+    posix.rmdir(ControlGroup.directory_for(ROLE_APPLICATION))
+    posix.rmdir(Configuration.CGROUP_ROOT)
+
+    os.remove(Configuration.PID_FILE_PATH)
+    os.remove(Configuration.FIFO_PATH)
+end
+
+-- ============================================================================
+-- Application supervisor
+-- ============================================================================
+
+local Supervisor = {
+    -- What is running right now: { role = "launcher" | "app", generation = N }
+    -- or nil when nothing is running (or we deliberately forgot about it).
+    current = nil,
+    generation_counter = 0,
+    control_fifo = nil,
 }
 
-# ----------------------------------------------------------------- cgroups ---
-setup_cgroups() {
-    if ! grep -q ' cgroup2 ' /proc/mounts; then
-        mount -t cgroup2 none "$CG_MOUNT" || { log "cannot mount cgroup2"; return 1; }
-    fi
-    mkdir -p "$CG_ROOT/launcher" "$CG_ROOT/app" || return 1
-}
+-- Points stdin/stdout/stderr at the console, or at /dev/null and a log file.
+local function redirect_standard_streams(terminal_mode, log_file_path)
+    local input_descriptor
+    local output_descriptor
 
-# true if the cgroup has at least one process (file size is always 0 on
-# kernfs, so we must actually read from it)
-cg_populated() { read -r _x <"$1/cgroup.procs" 2>/dev/null; }
-
-# cg_signal <dir> <signal>: send a signal to every process in the cgroup.
-# Returns immediately; does not wait for anything to die.
-cg_signal() {
-    for _p in $(cat "$1/cgroup.procs" 2>/dev/null); do
-        kill "-$2" "$_p" 2>/dev/null
-    done
-}
-
-# cg_stop <dir>: SIGKILL everything in the cgroup and wait until it is empty.
-# No grace period; graceful exits are requested via stop-application.
-cg_stop() {
-    _dir=$1
-    cg_populated "$_dir" || return 0
-    _n=$((5 * PER_SEC))
-    while cg_populated "$_dir" && [ "$_n" -gt 0 ]; do
-        if [ -w "$_dir/cgroup.kill" ]; then
-            echo 1 >"$_dir/cgroup.kill" 2>/dev/null
-        else
-            cg_signal "$_dir" KILL
-        fi
-        nap; _n=$((_n - 1))
-    done
-    cg_populated "$_dir" && log "WARNING: $_dir still populated (D-state task?)"
-    return 0
-}
-
-# ------------------------------------------------------------- spawn logic ---
-# spawn <launcher|app> <command-string> <logfile> [terminal_mode=0|1]
-# Runs the command as $RUN_USER inside its cgroup. A watcher subshell reports
-# the exit back to the daemon through the FIFO, tagged with a generation id.
-spawn() {
-    _role=$1; _cmd=$2; _log=$3; _term=${4:-0}
-    GEN=$((GEN + 1)); _g=$GEN
-    case $_role in
-        launcher) LAUNCHER_GEN=$_g ;;
-        app)      APP_GEN=$_g ;;
-    esac
-    (
-        exec 3<&-                      # don't leak the control FIFO to children
-        if [ "$_term" = 1 ]; then
-            chown "$RUN_USER" "$CONSOLE" 2>/dev/null
-            exec <"$CONSOLE" >"$CONSOLE" 2>&1
-            _wrap=$TTY_WRAPPER
-        else
-            exec </dev/null >"$_log" 2>&1
-            _wrap=
-        fi
-        /bin/sh -c '
-            echo 0 >/proc/self/oom_score_adj 2>/dev/null   # undo the daemon'"'"'s protection
-            echo $$ >"$1/cgroup.procs" || exit 111          # join cgroup BEFORE exec
-            exec $4 su -l -s /bin/sh "$2" -c "$3"
-        ' sh "$CG_ROOT/$_role" "$RUN_USER" "$_cmd" "$_wrap"
-        _rc=$?
-        [ -p "$FIFO" ] && echo "exited $_role $_g $_rc" >"$FIFO"
-    ) &
-}
-
-start_launcher() {
-    STATE=launcher
-    cg_stop "$CG_ROOT/app"           # invariant: app group empty first
-    LAUNCH_T=$(uptime_s)
-    [ -x "$LAUNCHER_CMD" ] || log "launcher $LAUNCHER_CMD missing or not executable"
-    log "starting launcher"
-    spawn launcher "$LAUNCHER_CMD" "$LAUNCHER_LOG"
-}
-
-show_loading() {
-    {
-        printf '\033[2J\033[H\033[?25l'
-        cat <<'EOF'
-
-
-
-
-                    @@@@@@                     +@@@@@
-                   :@-:  @@@.                @@@% --@@
-                   @@----- @@@             @@@  -----@
-                   @@------ :@@@@@@@@@@@@@@@@ -------@:
-                   @*---:  @@@@@@@@@@@@@@@@@@@   ----@:
-                   @@-: =@@@@@@@@@@@@@@@@@@@@@@@@  --@
-                   @@ #@@@@@@@@@@@@@@@@@@@@@@@@@@@@  @
-                     @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@-      @@*
-                    @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@* =@@@@@@@@@
-                   @@@@@@  @@:  @@@@@@@@@@  :@@  @@@@ =@@@@@@@@@@@
-                   @@@@@@@@@@@@# @@@@@@@@ @@@@@@@@@@@ @@ #@@ @@ @@
-                   @@@+  @@@@@@@@@@@@@@@@@@@@@@@+  @@* % +@@ @@ @
-                   @@@@@@@@@@@@@@@@----@@@@@@@@@@@@@@@@ @:     %
-                   @@@@@@@@@@@ @@@@@  @@@@@ @@@@@@@@@@# @@@@@@@@
-                    @@+ @@@@@@@    @@@@   @@@@@@@  @@@ @@@@@@@@@
-                           -@@      @       ..             .
-             +@@    .@@@@@@   .@@@@   @@@@@@@ *@@ @@@  #@@  @@@@@@
-             @@@   :@@   @@@  @@ @@  .@@   @@ @@@.@@@@ @@@ @@
-             @@.   @@@ . @@@ @@- @@. @@@  +@@ @@ @@@=@@@@.@@@ +@@@
-             @@    +@@@@@@@ @@@@@@@@ @@@@@@@  @@ @@@ @@@@ .@@@@@@@
-            @@@@@@   +@@:  @@@   @@@ @@@@%   @@@ @@   @@@   -@@-
-EOF
-    } >"$CONSOLE" 2>/dev/null
-}
-
-do_launch() {
-    _rest=$1                           # "<terminal_mode 0|1> <command...>"
-    _term=${_rest%% *}
-    _cmd=${_rest#* }
-    if [ -z "$_cmd" ] || [ "$_cmd" = "$_rest" ]; then
-        log "ignoring malformed launch request"; return
-    fi
-    log "launching app: $_cmd"
-
-    # Ignore exit events from whatever we are about to kill on purpose.
-    LAUNCHER_GEN=0
-    APP_GEN=0
-    cg_stop "$CG_ROOT/launcher"
-    cg_stop "$CG_ROOT/app"
-
-    set -- $_cmd
-    show_loading "${1##*/}"
-
-    if [ "$_term" = 1 ]; then
-        _out=/dev/null                 # unused: terminal mode talks to the console
-        printf '\033[?25h' >"$CONSOLE" 2>/dev/null     # un-hide cursor
+    if terminal_mode then
+        local console_descriptor = posix.open(Configuration.CONSOLE_PATH, posix.O_RDWR)
+        input_descriptor = console_descriptor
+        output_descriptor = console_descriptor
     else
-        [ -f "$APP_LOG" ] && mv -f "$APP_LOG" "$APP_LOG.old"
-        : >"$APP_LOG"; chmod 644 "$APP_LOG"
-        _out=$APP_LOG
-    fi
+        input_descriptor = posix.open("/dev/null", posix.O_RDONLY)
+        output_descriptor = posix.open(log_file_path, posix.O_WRONLY)
+    end
 
-    STATE=app
-    spawn app "$_cmd" "$_out" "$_term"
-}
+    posix.dup2(input_descriptor, STANDARD_INPUT)
+    posix.dup2(output_descriptor, STANDARD_OUTPUT)
+    posix.dup2(output_descriptor, STANDARD_ERROR)
+end
 
-start_autolaunch() {
-    _cmd=$(grep -v '^#' "$AUTOLAUNCH" 2>/dev/null | head -n 1)
-    if [ -z "$_cmd" ] || [ -e "$RUN_DIR/autolaunched" ]; then
-        start_launcher; return
-    fi
-    : >"$RUN_DIR/autolaunched"
-    do_launch "0 $_cmd"
-}
+-- Runs inside the forked worker process and turns it into the application.
+-- Never returns: it either execs or exits.
+local function run_worker(role, command, terminal_mode, log_file_path)
+    posix.signal(posix.SIGTERM, posix.SIG_DFL)
+    posix.signal(posix.SIGINT, posix.SIG_DFL)
+    posix.signal(posix.SIGHUP, posix.SIG_DFL)
 
-on_exit() {                            # <role> <gen> <rc>
-    case $1 in
-        launcher)
-            [ "$2" = "$LAUNCHER_GEN" ] || return
-            LAUNCHER_GEN=0
-            cg_stop "$CG_ROOT/launcher"      # reap stragglers
-            log "launcher exited (rc=$3)"
-            [ "$STATE" = launcher ] || return
-            if [ $(( $(uptime_s) - LAUNCH_T )) -lt "$MIN_LAUNCHER_UPTIME" ]; then
-                # crash-loop throttle, done async so we keep serving requests
-                ( exec 3<&-; sleep "$RESTART_DELAY"
-                  [ -p "$FIFO" ] && echo retry >"$FIFO" ) &
-            else
-                start_launcher
-            fi
-            ;;
-        app)
-            [ "$2" = "$APP_GEN" ] || return
-            APP_GEN=0
-            cg_stop "$CG_ROOT/app"           # app's main process is gone; reap helpers
-            log "app exited (rc=$3), returning to launcher"
-            start_launcher
-            ;;
-    esac
-}
+    Utilities.write_file("/proc/self/oom_score_adj", "0")
 
-# Neither of these clears APP_GEN: the watcher's exit event (main process
-# gone) is what flips us back to the launcher. If the main process dies but
-# helpers survive SIGTERM, on_exit() hard-kills the leftovers.
-do_stop_app() {
-    [ "$APP_GEN" != 0 ] && cg_signal "$CG_ROOT/app" TERM
-}
+    local process_id = tostring(posix.getpid("pid"))
+    local joined_cgroup = Utilities.write_file(ControlGroup.directory_for(role) .. "/cgroup.procs", process_id)
+    if not joined_cgroup then
+        posix._exit(111)
+    end
 
-do_kill_app() {
-    [ "$APP_GEN" != 0 ] && cg_stop "$CG_ROOT/app"
-}
+    if terminal_mode then
+        os.execute(string.format("chown %s %s 2>/dev/null",
+            Utilities.shell_quote(Configuration.RUN_USER),
+            Utilities.shell_quote(Configuration.CONSOLE_PATH)))
+    end
+    redirect_standard_streams(terminal_mode, log_file_path)
 
-shutdown_all() {
-    trap '' TERM INT HUP
-    log "shutting down"
-    LAUNCHER_GEN=0; APP_GEN=0
-    cg_stop "$CG_ROOT/launcher"
-    cg_stop "$CG_ROOT/app"
-    wait
-    rmdir "$CG_ROOT/launcher" "$CG_ROOT/app" "$CG_ROOT" 2>/dev/null
-    rm -f "$PIDFILE" "$FIFO"
-    exit 0
-}
+    -- `su -l` gives the app a proper login environment for RUN_USER.
+    local program = "su"
+    local arguments = { "-l", "-s", "/bin/sh", Configuration.RUN_USER, "-c", command }
 
-# ------------------------------------------------------------------ daemon ---
-daemon() {
-    init_timing
-    mkdir -p "$RUN_DIR" "$LOG_DIR" || exit 1
-    chmod 755 "$LOG_DIR"
-    rm -f "$FIFO"
-    mkfifo -m 0620 "$FIFO" || exit 1
-    chown "root:$(id -gn "$RUN_USER" 2>/dev/null || echo root)" "$FIFO"
-    echo $$ >"$PIDFILE"
-    echo -900 >/proc/self/oom_score_adj 2>/dev/null   # OOM killer: take the app, not us
+    if terminal_mode then
+        -- `setsid -c` makes the console the app's controlling terminal.
+        table.insert(arguments, 1, "su")
+        table.insert(arguments, 1, "-c")
+        program = "setsid"
+    end
 
-    setup_cgroups || exit 1
-    GEN=0; LAUNCHER_GEN=0; APP_GEN=0; STATE=launcher
-    cg_stop "$CG_ROOT/launcher"       # leftovers from a previous daemon crash
-    cg_stop "$CG_ROOT/app"
+    posix.execp(program, arguments)
+    posix._exit(127) -- only reached if exec failed
+end
 
-    trap shutdown_all TERM INT HUP
-    exec 3<>"$FIFO"                     # RDWR so we never see EOF
-    start_autolaunch
+-- Runs inside the forked watcher process. Never returns.
+local function run_watcher(role, generation, command, terminal_mode, log_file_path)
+    -- Don't hold the daemon's FIFO open, and don't inherit its signal handlers.
+    posix.close(posix.fileno(Supervisor.control_fifo))
+    posix.signal(posix.SIGTERM, posix.SIG_DFL)
+    posix.signal(posix.SIGINT, posix.SIG_DFL)
+    posix.signal(posix.SIGHUP, posix.SIG_DFL)
 
-    while read -r line <&3; do
-        case $line in
-            "launch "*)  do_launch "${line#launch }" ;;
-            "exited "*)  on_exit ${line#exited } ;;
-            stop-app)    do_stop_app ;;
-            kill-app)    do_kill_app ;;
-            retry)       [ "$STATE" = launcher ] && [ "$LAUNCHER_GEN" = 0 ] && start_launcher ;;
-            stop)        shutdown_all ;;
-        esac
-    done
-    shutdown_all
-}
+    local start_time = os.time()
+    local worker_process_id = posix.fork()
 
-# --------------------------------------------------------------------- CLI ---
-case "$1" in
-    start)
-        if daemon_running; then echo "appd already running"; exit 0; fi
-        echo "Starting appd"
-        mkdir -p "$RUN_DIR"
-        setsid "$SELF" daemon </dev/null >/dev/null 2>&1 &
-        ;;
+    if worker_process_id == 0 then
+        local succeeded, error_message = pcall(run_worker, role, command, terminal_mode, log_file_path)
+        if not succeeded then
+            Utilities.log("worker failed: %s", tostring(error_message))
+        end
+        posix._exit(1)
+    end
 
-    daemon)
-        daemon
-        ;;
+    local _, exit_reason, exit_value = posix.wait(worker_process_id)
 
-    stop)
-        init_timing
-        echo "Stopping appd"
-        if daemon_running; then
-            send stop
-            _i=0
-            while daemon_running && [ "$_i" -lt $((20 * PER_SEC)) ]; do nap; _i=$((_i + 1)); done
-            if daemon_running; then
-                read -r _pid <"$PIDFILE"; kill -KILL "$_pid" 2>/dev/null
-            fi
-        fi
-        # belt and braces if the daemon was already dead
-        cg_stop "$CG_ROOT/launcher"
-        cg_stop "$CG_ROOT/app"
-        rmdir "$CG_ROOT/launcher" "$CG_ROOT/app" "$CG_ROOT" 2>/dev/null
-        rm -f "$PIDFILE" "$FIFO"
-        ;;
+    local exit_code = 1
+    if exit_reason == "exited" then
+        exit_code = exit_value
+    elseif exit_reason == "killed" then
+        exit_code = 128 + exit_value -- shell convention for "died from a signal"
+    end
 
-    restart)
-        "$SELF" stop
-        "$SELF" start
-        ;;
+    -- Crash-loop throttle: a launcher that dies almost immediately is
+    -- restarted only after a short delay.
+    local uptime_seconds = os.time() - start_time
+    if role == ROLE_LAUNCHER and uptime_seconds < Configuration.MINIMUM_LAUNCHER_UPTIME_SECONDS then
+        posix.sleep(Configuration.RESTART_DELAY_SECONDS)
+    end
 
-    status)
-        if daemon_running; then echo "appd: running (pid $(cat "$PIDFILE"))"; else echo "appd: stopped"; fi
-        cg_populated "$CG_ROOT/launcher" && echo "launcher cgroup: populated"
-        cg_populated "$CG_ROOT/app"      && echo "application cgroup: populated"
-        ;;
+    local fifo = io.open(Configuration.FIFO_PATH, "a")
+    if fifo then
+        fifo:write(string.format("exited %s %d %d\n", role, generation, exit_code))
+        fifo:close()
+    end
+    posix._exit(0)
+end
 
-    launch-application)
-        # $2 = command string; $3 = TERMINAL_MODE (1 = terminal, anything else = normal)
-        if [ -z "$2" ]; then
-            echo "usage: $0 launch-application \"<command>\" [TERMINAL_MODE=1]" >&2; exit 1
-        fi
-        [ "$3" = 1 ] && _term=1 || _term=0
-        send "launch $_term $2"
-        ;;
+-- Starts `command` as the given role. Returns immediately in the daemon.
+function Supervisor.spawn(role, command, terminal_mode, log_file_path)
+    Supervisor.generation_counter = Supervisor.generation_counter + 1
+    local generation = Supervisor.generation_counter
+    Supervisor.current = { role = role, generation = generation }
 
-    stop-application)
-        send stop-app
-        ;;
+    if not terminal_mode then
+        Utilities.reset_file(log_file_path)
+    end
 
-    kill-application)
-        send kill-app
-        ;;
+    local watcher_process_id = posix.fork()
 
-    *)
-        echo "usage: $0 {start|stop|restart|status|launch-application CMD [TERMINAL_MODE]|stop-application|kill-application}" >&2
-        exit 1
-        ;;
-esac
+    if watcher_process_id == nil then
+        Utilities.log("fork failed while starting %s", role)
+        Supervisor.current = nil
+        return
+    end
 
-exit 0
+    if watcher_process_id ~= 0 then
+        return -- we are the daemon; the watcher takes it from here
+    end
+
+    -- Everything below runs in the watcher. pcall guarantees an error can
+    -- never escape into a copy of the daemon's main loop.
+    local succeeded, error_message = pcall(run_watcher, role, generation, command, terminal_mode, log_file_path)
+    if not succeeded then
+        Utilities.log("watcher failed: %s", tostring(error_message))
+    end
+    posix._exit(1)
+end
+
+function Supervisor.show_loading_screen()
+    local console = io.open(Configuration.CONSOLE_PATH, "w")
+    if not console then
+        return
+    end
+
+    console:write(TERMINAL_CLEAR_SCREEN_AND_HIDE_CURSOR)
+
+    local splash_screen = Utilities.read_file(Configuration.SPLASH_SCREEN_PATH)
+    if splash_screen then
+        console:write(splash_screen)
+    end
+
+    console:close()
+end
+
+function Supervisor.start_launcher()
+    -- Invariant: the application cgroup must be empty before the launcher runs.
+    ControlGroup.stop(ControlGroup.directory_for(ROLE_APPLICATION))
+    local launcher_command = Database.query_first_row("SELECT apps.command FROM active_launcher INNER JOIN apps ON active_launcher.app_id = apps.id;", {command = Configuration.DEFAULT_LAUNCHER_COMMAND}).command
+
+    Utilities.log("starting launcher: %s", launcher_command)
+    Supervisor.spawn(ROLE_LAUNCHER, launcher_command, false, Configuration.LAUNCHER_LOG_PATH)
+end
+
+function Supervisor.launch_application(command, terminal_mode)
+    Utilities.log("launching app: %s", command)
+
+    -- Forget what is running so the exit events from the processes we are
+    -- about to kill are ignored.
+    Supervisor.current = nil
+
+    ControlGroup.stop_all()
+    Supervisor.show_loading_screen()
+
+    if terminal_mode then
+        Utilities.write_file(Configuration.CONSOLE_PATH, TERMINAL_SHOW_CURSOR)
+    else
+        os.rename(Configuration.APPLICATION_LOG_PATH, Configuration.APPLICATION_LOG_PATH .. ".old")
+    end
+
+    Supervisor.spawn(ROLE_APPLICATION, command, terminal_mode, Configuration.APPLICATION_LOG_PATH)
+end
+
+function Supervisor.start_autolaunch()
+    local autolaunch_app = Database.query_first_row("SELECT apps.command, apps.terminal FROM autolaunch INNER JOIN apps ON autolaunch.app_id = apps.id;", nil)
+
+    if autolaunch_app == nil then
+        Supervisor.start_launcher()
+        return
+    end
+
+    Utilities.write_file(Configuration.RUN_DIRECTORY .. "/autolaunched", "")
+    Supervisor.launch_application(autolaunch_app.command, autolaunch_app.terminal == 1)
+end
+
+-- Called when a watcher reports that its worker has exited.
+function Supervisor.handle_exit(role, generation, exit_code)
+    local current = Supervisor.current
+
+    if current == nil or current.role ~= role or current.generation ~= generation then
+        return -- stale event from something we killed on purpose
+    end
+
+    Supervisor.current = nil
+    ControlGroup.stop(ControlGroup.directory_for(role)) -- clean up any stragglers
+    Utilities.log("%s exited (exit code %d)", role, exit_code)
+
+    -- Whatever just exited, the launcher is always what comes next. (If the
+    -- launcher crashed too quickly, its watcher already delayed this event.)
+    Supervisor.start_launcher()
+end
+
+function Supervisor.is_application_running()
+    return Supervisor.current ~= nil and Supervisor.current.role == ROLE_APPLICATION
+end
+
+function Supervisor.shutdown()
+    Utilities.log("shutting down")
+    Supervisor.current = nil
+    tear_down_runtime_state()
+    os.exit(0)
+end
+
+-- ============================================================================
+-- Daemon loop
+-- ============================================================================
+
+local Daemon = {}
+
+-- Requests arrive as one line each: "<verb> <arguments>".
+local request_handlers = {}
+
+request_handlers["launch"] = function(arguments)
+    local terminal_flag, command = arguments:match("^(%d) (.*)$")
+    if command == nil then
+        Utilities.log("ignoring malformed launch request")
+        return
+    end
+
+    Supervisor.launch_application(command, terminal_flag == "1")
+end
+
+request_handlers["exited"] = function(arguments)
+    local role, generation, exit_code = arguments:match("^(%w+) (%d+) (%d+)$")
+    if exit_code == nil then
+        Utilities.log("ignoring malformed exit report")
+        return
+    end
+
+    Supervisor.handle_exit(role, tonumber(generation), tonumber(exit_code))
+end
+
+request_handlers["stop-app"] = function()
+    if Supervisor.is_application_running() then
+        ControlGroup.send_signal(ControlGroup.directory_for(ROLE_APPLICATION), posix.SIGTERM)
+    end
+end
+
+request_handlers["kill-app"] = function()
+    if Supervisor.is_application_running() then
+        ControlGroup.stop(ControlGroup.directory_for(ROLE_APPLICATION))
+    end
+end
+
+request_handlers["stop"] = function()
+    Supervisor.shutdown()
+end
+
+-- Every spawn leaves a finished watcher process behind; collect them so they
+-- don't pile up as zombies.
+local function reap_finished_watchers()
+    while true do
+        local reaped_process_id = posix.wait(-1, posix.WNOHANG)
+
+        if reaped_process_id == nil or reaped_process_id == 0 then
+            return
+        end
+    end
+end
+
+local function prepare_runtime_files()
+    Utilities.make_directories(Configuration.RUN_DIRECTORY)
+    Utilities.make_directories(Configuration.LOG_DIRECTORY)
+    stat.chmod(Configuration.LOG_DIRECTORY, tonumber("755", 8))
+
+    os.remove(Configuration.FIFO_PATH)
+    stat.mkfifo(Configuration.FIFO_PATH)
+    stat.chmod(Configuration.FIFO_PATH, tonumber("620", 8))
+
+    Utilities.write_file(Configuration.PID_FILE_PATH, tostring(posix.getpid("pid")) .. "\n")
+
+    -- Make sure the kernel's out-of-memory killer picks the app, not us.
+    Utilities.write_file("/proc/self/oom_score_adj", "-900\n")
+end
+
+function Daemon.run()
+    Database.ensure_app_cache_exists()
+    prepare_runtime_files()
+
+    ControlGroup.setup()
+    ControlGroup.stop_all()
+
+    posix.signal(posix.SIGTERM, Supervisor.shutdown)
+    posix.signal(posix.SIGINT, Supervisor.shutdown)
+    posix.signal(posix.SIGHUP, Supervisor.shutdown)
+
+    -- Opening the FIFO read+write means open() never blocks and reads never
+    -- hit end-of-file when the last writer disconnects.
+    Supervisor.control_fifo = io.open(Configuration.FIFO_PATH, "r+")
+
+    Supervisor.start_autolaunch()
+
+    for request_line in Supervisor.control_fifo:lines() do
+        reap_finished_watchers()
+
+        local verb, arguments = request_line:match("^(%S+)%s*(.*)$")
+        local handler = request_handlers[verb]
+
+        if handler then
+            -- A bug while handling one request must not take down the supervisor.
+            local succeeded, error_message = pcall(handler, arguments)
+            if not succeeded then
+                Utilities.log("error handling '%s': %s", verb, tostring(error_message))
+            end
+        end
+    end
+
+    Supervisor.shutdown()
+end
+
+-- ============================================================================
+-- Command line interface
+-- ============================================================================
+
+local self_path = arg[0]
+
+local commands = {}
+
+function commands.start()
+    if Utilities.is_daemon_running() then
+        print("appd already running")
+        return
+    end
+
+    print("Starting appd")
+    Utilities.make_directories(Configuration.RUN_DIRECTORY)
+    os.execute(string.format("setsid %s daemon </dev/null >/dev/null 2>&1 &", Utilities.shell_quote(self_path)))
+end
+
+function commands.stop()
+    print("Stopping appd")
+
+    if Utilities.is_daemon_running() then
+        Utilities.send_to_daemon("stop")
+
+        local attempts = 0
+        while Utilities.is_daemon_running() and attempts < 200 do -- 20 seconds max
+            Utilities.pause_briefly()
+            attempts = attempts + 1
+        end
+
+        if Utilities.is_daemon_running() then
+            posix.kill(Utilities.read_daemon_process_id(), posix.SIGKILL)
+        end
+    end
+
+    tear_down_runtime_state()
+end
+
+function commands.restart()
+    commands.stop()
+    commands.start()
+end
+
+function commands.status()
+    if Utilities.is_daemon_running() then
+        print("appd: running (pid " .. string.format("%d", Utilities.read_daemon_process_id()) .. ")")
+    else
+        print("appd: stopped")
+    end
+
+    if ControlGroup.is_populated(ControlGroup.directory_for(ROLE_LAUNCHER)) then
+        print("launcher cgroup: populated")
+    end
+
+    if ControlGroup.is_populated(ControlGroup.directory_for(ROLE_APPLICATION)) then
+        print("application cgroup: populated")
+    end
+end
+
+function commands.daemon()
+    Daemon.run()
+end
+
+commands["launch-application"] = function(parsed_arguments)
+    local terminal_flag = 0
+    if parsed_arguments.terminal_mode == 1 then
+        terminal_flag = 1
+    end
+
+    Utilities.send_to_daemon(string.format("launch %d %s", terminal_flag, parsed_arguments.application_command))
+end
+
+commands["stop-application"] = function()
+    Utilities.send_to_daemon("stop-app")
+end
+
+commands["kill-application"] = function()
+    Utilities.send_to_daemon("kill-app")
+end
+
+local parser = argparse("appctl", "launcher / application supervisor")
+parser:command_target("command")
+
+parser:command("start", "Start daemon")
+parser:command("daemon", "Run daemon in foreground")
+parser:command("stop", "Stop daemon")
+parser:command("restart", "Restart daemon")
+parser:command("status", "Check system status")
+
+local launch_command = parser:command("launch-application", "Launch application via cgroups")
+launch_command:argument("application_command", "Shell command string to execute")
+launch_command:argument("terminal_mode", "Terminal mode (1=console, default=0)"):default("0"):convert(tonumber)
+
+parser:command("stop-application", "Send SIGTERM to app cgroup")
+parser:command("kill-application", "Send SIGKILL to app cgroup")
+
+local parsed_arguments = parser:parse()
+commands[parsed_arguments.command](parsed_arguments)
+os.exit(0)

@@ -1,0 +1,4 @@
+#!/bin/sh
+mkdir -p /var/lib/goodluckos
+chmod 0777 /var/lib/goodluckos
+[ -e /var/lib/goodluckos/apps.sqlite ] && chmod 0666 /var/lib/goodluckos/apps.sqlite

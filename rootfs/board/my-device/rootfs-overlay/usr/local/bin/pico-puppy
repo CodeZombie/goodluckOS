@@ -1,0 +1,57 @@
+#!/usr/bin/env luajit
+-- Pico Puppy: The simplest possible launcher for goodluckOS.
+
+local menui = require("menui")
+local appdb = require("libappcachedb")
+
+local appcache = {
+    categories = (function()
+        local cats = appdb.get_app_categories()
+        table.sort(cats)
+        return cats
+    end)(),
+    apps = {}
+}
+
+local function get_apps_in_category(category)
+    if appcache.apps[category] then
+        return appcache.apps[category]
+    end
+    appcache.apps[category] = appdb.get_apps_in_category(category)
+    table.sort(appcache.apps[category], function(a, b) return a.name:lower() < b.name:lower() end)
+    return appcache.apps[category]
+end
+
+menui:start("Pico Puppy", function()
+    menui:page("home", {
+        label = "Select a Category",
+        on_render = function()
+            for _, category in ipairs(appcache.categories) do
+                menui:button(category, {
+                    label = category,
+                    align = "left",
+                    on_a_press_description = string.format("Open %s", category),
+                    on_a_press = function()
+                        menui:push_page("category-page", {category=category})
+                    end
+                })
+            end
+        end,
+    })
+
+    menui:page("category-page", {
+        on_render = function(page_context)
+            page_context.label = page_context.category
+            for i, app in ipairs(get_apps_in_category(page_context.category)) do
+                menui:button(tostring(i), { -- The key should be `app.id`, not `i`. `i` is not guaranteed to be stable
+                    label = app.name,
+                    align = "left",
+                    on_a_press_description = "Launch",
+                    on_a_press = function()
+                        os.execute(string.format("doas appctl launch-application \"%s\" %d", app.command, app.terminal))
+                    end
+                })
+            end
+        end,
+    })
+end)

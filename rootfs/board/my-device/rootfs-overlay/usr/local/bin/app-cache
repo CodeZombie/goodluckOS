@@ -1,0 +1,298 @@
+#!/usr/bin/env luajit
+-- app-cache: builds and maintains the GoodluckOS application cache (SQLite).
+--
+--   app-cache scan [--prune]        scan every path listed in the locations dir
+--   app-cache scan <path>           scan only <path>
+--   app-cache file                  print the path of the sqlite database
+--   app-cache autolaunch            print the id of the autolaunch app (exit 1 if none)
+--   app-cache autolaunch <id>       make <id> the autolaunch app
+--   app-cache autolaunch --clear    clear the autolaunch app
+--
+-- This file only defines the schema and glues two libraries together:
+--   libappscanner  finds entries (knows nothing about databases)
+--   seekwell       stores them   (knows nothing about apps)
+
+local argparse       = require("argparse")
+local libappcachedb   = require("libappcachedb")
+local libappscanner  = require("libappscanner")
+
+
+-- SCAN_FIELDS lists the columns a scanner is allowed to set; any other key a
+-- scanner returns goes into `metadata`.
+NON_METADATA_KEYS = {
+    command = true,
+    path = true,
+    name = true,
+    description = true,
+    category = true,
+    icon_filepath = true,
+    last_scan_id = true,
+    terminal = true,
+    launcher = true,
+    metadata = true, -- the metadata key should not itself in the metadata
+}
+
+----------------------------------------------------------------------
+-- helpers
+----------------------------------------------------------------------
+local function warn(msg) io.stderr:write("app-cache: warning: ", msg, "\n") end
+local function die(msg)  io.stderr:write("app-cache: ", msg, "\n"); os.exit(1) end
+
+----------------------------------------------------------------------
+-- scan results -> database rows
+----------------------------------------------------------------------
+-- Splits a scanner's entry into real columns and `metadata`.
+-- local function to_row(result, scan_id)
+--     local row, meta = {}, {}
+--     for k, v in pairs(result.entry) do
+--         if type(k) == "string" and v ~= nil and v ~= cjson.null then
+--             k = k:lower()
+--             if SCAN_FIELDS[k] then row[k] = v else meta[k] = v end
+--         end
+--     end
+--
+--     local ok, err = pcall(cjson.encode, meta)
+--     if not ok then
+--         warn("cannot encode metadata for '" .. tostring(row.name) .. "': " .. tostring(err))
+--         meta = {}
+--     end
+--
+--     row.metadata  = meta
+--     row.source    = result.source
+--     row.scanner   = result.scanner
+--     row.last_seen = scan_id
+--     return row
+-- end
+local function normalize_app(raw_app)
+    local normalized_app = { metadata = raw_app.metadata or {} }
+    for k, v in pairs(raw_app) do
+        if NON_METADATA_KEYS[k] then
+            normalized_app[k] = v
+        else
+            normalized_app.metadata[k] = v
+        end
+    end
+    return normalized_app
+end
+
+----------------------------------------------------------------------
+-- commands
+----------------------------------------------------------------------
+---
+---
+local function do_scan(prune)
+    local scanner, err = libappscanner.new({ warn = warn })
+    if not scanner then die(err) end
+
+    local scan_results, stats = scanner.scan_all()
+    if not scan_results then die(stats) end   -- on failure the 2nd return is the error
+
+    local db, db_err = libappcachedb.open()
+    if not db then die(db_err) end
+
+
+
+    local pre_scan_number_of_apps = nil
+    for t in db.connection:nrows("SELECT COUNT() AS value FROM apps") do
+        pre_scan_number_of_apps = t.value
+    end
+
+    local max_last_scan_id = 0
+    if prune then
+        for t in db.connection:nrows("SELECT COALESCE(MAX(last_scan_id), 0) AS value FROM apps") do
+            max_last_scan_id = t.value
+        end
+    end
+
+    for _, entry in ipairs(scan_results) do
+        if prune then
+            entry.last_scan_id = max_last_scan_id + 1
+        end
+        local normalized_app = normalize_app(entry.app)
+        local err = db:upsert_row("apps", normalized_app)
+        if err then
+            local row_str_parts = {}
+            for k, v in pairs(normalized_app) do
+                table.insert(row_str_parts, string.format("%s: %s", k, v))
+            end
+
+            print("[app-cache] The following scanned entry could not be inserted into the app-cache database:")
+            print(string.format("[app-cache]    Scanned Entry: %s", table.concat(row_str_parts, ", ")))
+            print(string.format("[app-cache]    Error: %s", err))
+        end
+    end
+
+    if prune then
+        err = db.connection:exec(string.format("DELETE FROM apps WHERE last_scan_id < %d", max_last_scan_id + 1))
+        if err ~= db.sqlite3.OK then die("database error: " .. err) end
+    end
+
+    local post_scan_number_of_apps = nil
+    for t in db.connection:nrows("SELECT COUNT() AS value FROM apps") do
+        post_scan_number_of_apps = t.value
+    end
+
+    local app_count_delta = post_scan_number_of_apps - pre_scan_number_of_apps
+
+    print(string.format("Scanned %d file(s) with %d scanner(s).", stats.files, stats.scanners))
+
+    local sign = ""
+    if app_count_delta >= 0 then
+        sign = "+"
+    end
+    print(string.format("Delta: %s%d total app(s)", sign, app_count_delta))
+end
+
+-- local function do_scan_OLD(single_file, prune)
+--     local scanner, err = libappscanner.new({
+--         warn          = warn,
+--     })
+--     if not scanner then die(err) end
+--
+--     local results, stats
+--     if single_file then
+--         results, err = scanner.scan_file(single_file)
+--         if not results then die(err) end
+--         stats = { files = 1, scanners = #scanner.scanner_names(), entries = #results }
+--     else
+--         results, stats = scanner.scan_all()
+--         if not results then die(stats) end   -- on failure the 2nd return is the error
+--     end
+--
+--     local db, db_err = libappcachedb.open()
+--     if not db then die(db_err) end
+--
+--     -- Unix time, but forced to increase on every scan: two scans in the same
+--     -- second would otherwise share an id and --prune couldn't tell them apart.
+--     local prev = db.query("SELECT COALESCE(MAX(last_seen), 0) AS m FROM apps")[1].m
+--     local scan_id = math.max(os.time(), prev + 1)
+--
+--     -- Normalise and de-duplicate by command: earlier entries win, gaps are filled.
+--     local by_command, order = {}, {}
+--     for _, result in ipairs(results) do
+--         local clean, why = db.apps.normalise(to_row(result, scan_id))
+--         if not clean then
+--             warn(result.source .. ": skipped entry (" .. why .. ")")
+--         else
+--             local existing = by_command[clean.command]
+--             if existing then
+--                 db.apps.merge(existing, clean)
+--             else
+--                 by_command[clean.command] = clean
+--                 order[#order + 1] = clean
+--             end
+--         end
+--     end
+--
+--     err = db.apps.insert_many(order)
+--     if err then die("database error: " .. err) end
+--
+--     local pruned = 0
+--     if prune and not single_file then
+--         if #order == 0 then
+--             warn("scan found nothing; refusing to prune")
+--         else
+--             err = db.exec("DELETE FROM apps WHERE last_seen != ?", { scan_id })
+--             if err then die("database error: " .. err) end
+--             pruned = db.changes()
+--         end
+--     end
+--
+--     local total = db.query("SELECT count(*) AS n FROM apps")[1].n
+--     db.close()
+--
+--     print(string.format(
+--         "Scanned %d file(s) with %d scanner(s): %d entries found, %d after de-duplication.",
+--         stats.files, stats.scanners, stats.entries, #order))
+--     print(string.format("Database holds %d apps (%s).", total, DB_PATH))
+--     if prune and not single_file then
+--         print(string.format("Pruned %d stale entries.", pruned))
+--     end
+-- end
+
+local function set_autolaunch_command(app_command)
+    local db, err = libappcachedb.open()
+    if not db then die(err) end
+    err = db:upsert_row("autolaunch", app_command)
+    db:close()
+    if err then die(err) end
+
+--     if id ~= nil then
+--         local rows, err = db.query("SELECT 1 FROM apps WHERE id = ?", { id })
+--         if not rows then die(err) end
+--         if #rows == 0 then die("no application with id " .. id) end
+--     end
+--
+--     err = db.transaction(function()
+--         local e = db.exec("UPDATE apps SET autolaunch = 0 WHERE autolaunch = 1")
+--         if e then error(e, 0) end
+--         if id ~= nil then
+--             e = db.exec("UPDATE apps SET autolaunch = 1 WHERE id = ?", { id })
+--             if e then error(e, 0) end
+--         end
+--     end)
+    -- db.close()
+    -- if err then die("failed to set autolaunch application: " .. err) end
+end
+
+local function get_autolaunch_command()
+    local db, err = libappcachedb.open()
+    if not db then die(err) end
+
+    local autolaunch_command = nil
+    for t in pairs(db.connection:nrows("SELECT apps.command FROM active_launcher INNER JOIN apps ON active_launcher.app_id = apps.id;")) do
+        autolaunch_command = t.command
+    end
+    db.close()
+    return autolaunch_command
+end
+--
+-- local function print_autolaunch_OLD()
+--     local db, err = libappcachedb.open()
+--     if not db then die(err) end
+--     local rows, qerr = db.query("SELECT command FROM autolaunch LIMIT 1")
+--     db.close()
+--     if not rows then die(qerr) end
+--     if #rows == 0 then os.exit(1) end
+--     print(rows[1].id)
+-- end
+
+----------------------------------------------------------------------
+-- CLI
+----------------------------------------------------------------------
+local parser = argparse("app-cache", "Builds and maintains the goodluckOS application cache.")
+parser:command_target("command")
+
+local scan_cmd = parser:command("scan", "Scan for apps and update the database.")
+scan_cmd:flag("--prune", "Remove entries not seen in this scan.")
+
+parser:command("file", "Print the path of the sqlite database.")
+
+local autolaunch_cmd = parser:command("autolaunch", "Show or set the app that autolaunches on boot.")
+autolaunch_cmd:argument("id", "The ID of the application to autolaunch."):args("?"):convert(function(s)
+    local n = tonumber(s)
+    if n and n >= 1 and n == math.floor(n) then return n end
+    return nil, "id must be a positive integer"
+end)
+autolaunch_cmd:flag("--clear", "Clear the autolaunch application.")
+
+local args = parser:parse()
+
+if args.command == "file" then
+    print(libappcachedb.DB_PATH)
+elseif args.command == "autolaunch" then
+    if args.clear and args.id then
+        die("--clear and an id cannot be used together")
+    elseif args.clear then
+        set_autolaunch_command(nil)
+    elseif args.id then
+        set_autolaunch_command(args.id)
+    else
+        print(get_autolaunch_command())
+    end
+else
+    if args.path and args.prune then
+        die("--prune only makes sense for a full scan")
+    end
+    do_scan(args.prune)
+end

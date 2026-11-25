@@ -1,0 +1,231 @@
+#!/usr/bin/env luajit
+local menui = require("menui")
+
+local STRINGS = {
+    English = {
+        language = "English",
+        code = "en",
+        page_welcome = "Welcome to goodluckOS",
+        page_language_select = "Language Select",
+        page_headphone_warning = "Headphone Warning",
+        welcome_banner = "\n\nWelcome / Bem-vindo / 欢迎 / Bienvenida\nस्वागत / Bienvenue / Добро пожаловать\n\n\nto goodluckOS\n\n",
+        select_your_language = "Select your language",
+        continue = "Continue",
+        change = "Change",
+        back = "Back",
+        i_accept = "I Accept",
+        headphone_warning = "⚠️WARNING: HEADPHONE RISK\n\nHeadphone audio is currently experimental and undergoing testing. Unexpected high-volume spikes may occur which could cause hearing damage.\nBY USING HEADPHONE AUDIO ON THIS DEVICE, YOU EXPLICITLY ASSUME ALL RISKS OF USE.\nWe strongly advise against using headphones or earbuds on your device for now. If you choose to test headphone audio, test using external speakers or without wearing headphones directly on/in your ears.\n"
+    },
+    Spanish = {
+        language = "Español",
+        code = "es",
+        page_welcome = "Bienvenido a goodluckOS",
+        page_language_select = "Seleccionar idioma",
+        page_headphone_warning = "Advertencia sobre auriculares",
+        welcome_banner = "\n\nWelcome / Bem-vindo / 欢迎 / Bienvenida\nस्वागत / Bienvenue / Добро пожаловать\n\n\na goodluckOS\n\n",
+        select_your_language = "Selecciona tu idioma",
+        continue = "Continuar",
+        change = "Cambiar",
+        back = "Atrás",
+        i_accept = "Acepto",
+        headphone_warning = "⚠️ADVERTENCIA: RIESGO POR AURICULARES\n\nEl audio por auriculares es actualmente experimental y está en fase de pruebas. Pueden producirse picos inesperados de volumen alto que podrían causar daños auditivos.\nAL USAR EL AUDIO POR AURICULARES EN ESTE DISPOSITIVO, ASUMES EXPLÍCITAMENTE TODOS LOS RIESGOS DE USO.\nTe recomendamos encarecidamente que no uses auriculares o audífonos en tu dispositivo por ahora. Si decides probar el audio por auriculares, hazlo con altavoces externos o sin llevar los auriculares puestos directamente sobre o dentro de los oídos.\n"
+    },
+    French = {
+        language = "Français",
+        code = "fr",
+        page_welcome = "Bienvenue sur goodluckOS",
+        page_language_select = "Choisir la langue",
+        page_headphone_warning = "Avertissement casque audio",
+        welcome_banner = "\n\nWelcome / Bem-vindo / 欢迎 / Bienvenida\nस्वागत / Bienvenue / Добро пожаловать\n\n\nsur goodluckOS\n\n",
+        select_your_language = "Sélectionnez votre langue",
+        continue = "Continuer",
+        change = "Modifier",
+        back = "Retour",
+        i_accept = "J'accepte",
+        headphone_warning = "⚠️AVERTISSEMENT : RISQUE LIÉ AU CASQUE AUDIO\n\nL'audio via casque est actuellement expérimental et en cours de test. Des pics de volume élevés et soudains peuvent survenir et provoquer des lésions auditives.\nEN UTILISANT L'AUDIO AU CASQUE SUR CET APPAREIL, VOUS ASSUMEZ EXPLICITEMENT TOUS LES RISQUES D'UTILISATION.\nNous vous déconseillons fortement d'utiliser un casque ou des écouteurs sur votre appareil pour le moment. Si vous choisissez de tester l'audio au casque, faites-le via des haut-parleurs externes ou sans porter le casque directement sur ou dans vos oreilles.\n"
+    },
+    Portuguese = {
+        language = "Português",
+        code = "pt",
+        page_welcome = "Bem-vindo ao goodluckOS",
+        page_language_select = "Selecionar idioma",
+        page_headphone_warning = "Aviso de fone de ouvido",
+        welcome_banner = "\n\nWelcome / Bem-vindo / 欢迎 / Bienvenida\nस्वागत / Bienvenue / Добро пожаловать\n\n\nao goodluckOS\n\n",
+        select_your_language = "Selecione seu idioma",
+        continue = "Continuar",
+        change = "Alterar",
+        back = "Voltar",
+        i_accept = "Eu aceito",
+        headphone_warning = "⚠️AVISO: RISCO COM FONES DE OUVIDO\n\nO áudio por fones de ouvido é atualmente experimental e está em fase de testes. Podem ocorrer picos repentinos de volume alto que podem causar danos auditivos.\nAO USAR O ÁUDIO POR FONES DE OUVIDO NESTE DISPOSITIVO, VOCÊ ASSUME EXPLICITAMENTE TODOS OS RISCOS DE USO.\nRecomendamos fortemente que você não use fones de ouvido ou intra-auriculares no seu dispositivo por enquanto. Se optar por testar o áudio por fones, teste usando alto-falantes externos ou sem usar os fones diretamente sobre ou dentro dos ouvidos.\n"
+    },
+    Russian = {
+        language = "Русский",
+        code = "ru",
+        page_welcome = "Добро пожаловать в goodluckOS",
+        page_language_select = "Выбор языка",
+        page_headphone_warning = "Предупреждение о наушниках",
+        welcome_banner = "\n\nWelcome / Bem-vindo / 欢迎 / Bienvenida\nस्वागत / Bienvenue / Добро пожаловать\n\n\nв goodluckOS\n\n",
+        select_your_language = "Выберите язык",
+        continue = "Продолжить",
+        change = "Изменить",
+        back = "Назад",
+        i_accept = "Принимаю",
+        headphone_warning = "⚠️ПРЕДУПРЕЖДЕНИЕ: ОПАСНОСТЬ ДЛЯ СЛУХА ПРИ ИСПОЛЬЗОВАНИИ НАУШНИКОВ\n\nЗвук в наушниках в настоящее время является экспериментальным и проходит тестирование. Возможны внезапные скачки высокой громкости, способные вызвать повреждение слуха.\nИСПОЛЬЗУЯ ЗВУК В НАУШНИКАХ НА ЭТОМ УСТРОЙСТВЕ, ВЫ ЯВНО ПРИНИМАЕТЕ НА СЕБЯ ВСЕ РИСКИ ИСПОЛЬЗОВАНИЯ.\nМы настоятельно не рекомендуем использовать наушники или вкладыши на вашем устройстве на данный момент. Если вы решите протестировать звук в наушниках, делайте это через внешние динамики или не надевая наушники непосредственно на/в уши.\n"
+    },
+    Indonesian = {
+        language = "Bahasa Indonesia",
+        code = "id",
+        page_welcome = "Selamat datang di goodluckOS",
+        page_language_select = "Pilih bahasa",
+        page_headphone_warning = "Peringatan headphone",
+        welcome_banner = "\n\nWelcome / Bem-vindo / 欢迎 / Bienvenida\nस्वागत / Bienvenue / Добро пожаловать\n\n\ndi goodluckOS\n\n",
+        select_your_language = "Pilih bahasa Anda",
+        continue = "Lanjutkan",
+        change = "Ubah",
+        back = "Kembali",
+        i_accept = "Saya setuju",
+        headphone_warning = "⚠️PERINGATAN: RISIKO HEADPHONE\n\nAudio headphone saat ini masih eksperimental dan sedang dalam tahap pengujian. Lonjakan volume tinggi yang tak terduga dapat terjadi dan berpotensi merusak pendengaran.\nDENGAN MENGGUNAKAN AUDIO HEADPHONE PADA PERANGKAT INI, ANDA SECARA TEGAS MENANGGUNG SEMUA RISIKO PENGGUNAAN.\nKami sangat menyarankan untuk tidak menggunakan headphone atau earbud pada perangkat Anda untuk saat ini. Jika Anda memilih untuk menguji audio headphone, ujilah menggunakan speaker eksternal atau tanpa mengenakan headphone langsung di/di dalam telinga Anda.\n"
+    },
+    German = {
+        language = "Deutsch",
+        code = "de",
+        page_welcome = "Willkommen bei goodluckOS",
+        page_language_select = "Sprache auswählen",
+        page_headphone_warning = "Kopfhörer-Warnung",
+        welcome_banner = "\n\nWelcome / Bem-vindo / 欢迎 / Bienvenida\nस्वागत / Bienvenue / Добро пожаловать\n\n\nbei goodluckOS\n\n",
+        select_your_language = "Wähle deine Sprache",
+        continue = "Weiter",
+        change = "Ändern",
+        back = "Zurück",
+        i_accept = "Ich akzeptiere",
+        headphone_warning = "⚠️WARNUNG: KOPFHÖRER-RISIKO\n\nDie Audioausgabe über Kopfhörer ist derzeit experimentell und befindet sich in der Testphase. Es können unerwartete Lautstärkespitzen auftreten, die zu Gehörschäden führen können.\nDURCH DIE NUTZUNG VON KOPFHÖRER-AUDIO AUF DIESEM GERÄT ÜBERNEHMEN SIE AUSDRÜCKLICH ALLE NUTZUNGSRISIKEN.\nWir raten dringend davon ab, vorerst Kopfhörer oder Ohrhörer an Ihrem Gerät zu verwenden. Wenn Sie Kopfhörer-Audio testen möchten, testen Sie es über externe Lautsprecher oder ohne die Kopfhörer direkt auf/in den Ohren zu tragen.\n"
+    },
+    Japanese = {
+        language = "日本語",
+        code = "ja",
+        page_welcome = "goodluckOS へようこそ",
+        page_language_select = "言語の選択",
+        page_headphone_warning = "ヘッドホンに関する警告",
+        welcome_banner = "\n\nWelcome / Bem-vindo / 欢迎 / Bienvenida\nस्वागत / Bienvenue / Добро пожаловать\n\n\ngoodluckOS へ\n\n",
+        select_your_language = "言語を選択してください",
+        continue = "続ける",
+        change = "変更",
+        back = "戻る",
+        i_accept = "同意する",
+        headphone_warning = "⚠️警告：ヘッドホンによるリスク\n\nヘッドホン音声は現在実験段階であり、テスト中です。予期せぬ大音量のスパイクが発生し、聴覚障害を引き起こす可能性があります。\n本デバイスでヘッドホン音声を使用することにより、すべての使用リスクを明示的に負うものとします。\n現時点では、お使いのデバイスでヘッドホンやイヤホンを使用しないことを強くお勧めします。ヘッドホン音声をテストする場合は、外部スピーカーを使用するか、耳に直接装着しない状態でテストしてください。\n"
+    },
+    Chinese = {
+        language = "简体中文",
+        code = "zh",
+        page_welcome = "欢迎使用 goodluckOS",
+        page_language_select = "选择语言",
+        page_headphone_warning = "耳机警告",
+        welcome_banner = "\n\nWelcome / Bem-vindo / 欢迎 / Bienvenida\nस्वागत / Bienvenue / Добро пожаловать\n\n\n使用 goodluckOS\n\n",
+        select_your_language = "选择你的语言",
+        continue = "继续",
+        change = "更改",
+        back = "返回",
+        i_accept = "我同意",
+        headphone_warning = "⚠️警告：耳机风险\n\n耳机音频目前处于实验阶段并正在测试中。可能会出现意外的高音量峰值，从而导致听力损伤。\n在此设备上使用耳机音频即表示您明确承担所有使用风险。\n我们强烈建议您目前不要在此设备上使用耳机或入耳式耳塞。如果您选择测试耳机音频，请使用外接扬声器测试，或在未将耳机直接佩戴于/放入耳中的情况下进行测试。\n"
+    },
+    Swahili = {
+        language = "Kiswahili",
+        code = "sw",
+        page_welcome = "Karibu kwenye goodluckOS",
+        page_language_select = "Chagua lugha",
+        page_headphone_warning = "Onyo la vipokea sauti vya masikioni",
+        welcome_banner = "\n\nWelcome / Bem-vindo / 欢迎 / Bienvenida\nस्वागत / Bienvenue / Добро пожаловать\n\n\nkwenye goodluckOS\n\n",
+        select_your_language = "Chagua lugha yako",
+        continue = "Endelea",
+        change = "Badilisha",
+        back = "Rudi",
+        i_accept = "Ninakubali",
+        headphone_warning = "⚠️ONYO: HATARI YA VIPOKEA SAUTI VYA MASIKIONI\n\nSauti ya vipokea sauti vya masikioni kwa sasa ni ya majaribio na inafanyiwa uchunguzi. Milipuko isiyotarajiwa ya sauti ya juu inaweza kutokea na kusababisha uharibifu wa kusikia.\nKWA KUTUMIA SAUTI YA VIPOKEA SAUTI VYA MASIKIONI KWENYE KIFAA HIKI, UNAKUBALI WAZI HATARI ZOTE ZA MATUMIZI.\nTunashauri sana usitumie vipokea sauti vya masikioni au vipuli vya masikioni kwenye kifaa chako kwa sasa. Ukichagua kujaribu sauti ya vipokea sauti, jaribu kwa kutumia spika za nje au bila kuvaa vipokea sauti moja kwa moja kwenye/ndani ya masikio yako.\n"
+    }
+}
+
+local language = "English"
+
+local languages = {}
+
+for lang in pairs(STRINGS) do
+    table.insert(languages, lang)
+end
+
+table.sort(languages)
+
+local language_native_names = {}
+for _, v in ipairs(languages) do
+    table.insert(language_native_names, STRINGS[v].language)
+end
+
+menui.auto_exit = false
+
+menui:start("Welcome", function()
+    local s = STRINGS[language]
+
+    menui:page("welcome-page", {
+        label = string.format("🐱 %s", s.page_welcome),
+        on_enter = function(page_context)
+            page_context._element_index = 2 -- force the second element to be selected by default
+        end,
+        on_render = function()
+            menui:label("welcome_bilingual", {
+                label = s.welcome_banner,
+                align = "center"
+            })
+            menui:button("continue", {
+                label = s.continue,
+                align = "center",
+                on_a_press_description = s.continue,
+                on_a_press = function()
+                    menui:push_page("language-select-page")
+                end
+            })
+        end,
+    })
+
+
+    menui:page("headphone-warning-page", {
+        label = string.format("⚠️ %s", s.page_headphone_warning),
+        on_render = function()
+            menui:label("headphone-warning-text", {
+                label = s.headphone_warning
+            })
+            menui:button("i accept button", {
+                label = s.i_accept,
+                align = "center",
+                on_a_press_description = s.i_accept,
+                on_a_press = function()
+                    -- save language settings (e.g. s.code)
+                    menui:quit()
+                    -- os.exit()
+                end
+            })
+        end
+    })
+
+
+    menui:page("language-select-page", {
+        label = string.format("💬 %s", s.page_language_select),
+        on_render = function()
+            menui:select("Select your language", {
+                label = s.select_your_language,
+                value = STRINGS[language].language,
+                options = language_native_names,
+                on_change = function(index, _)
+                    language = languages[index]
+                end
+            })
+            menui:button("continue", {
+                label = s.continue,
+                align = "center",
+                on_a_press_description = s.continue,
+                on_a_press = function()
+                    -- menui:pop_page()
+                    menui:push_page("headphone-warning-page")
+                end
+            })
+        end,
+    })
+end)

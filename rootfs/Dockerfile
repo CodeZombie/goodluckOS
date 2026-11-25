@@ -19,6 +19,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     unzip \
     rsync \
     bc \
+    gcc-multilib \
+    g++-multilib \
     && rm -rf /var/lib/apt/lists/*
 # Create external.desc
 RUN echo "name: GOODLUCKOS\n\

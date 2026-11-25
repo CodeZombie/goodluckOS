@@ -1,0 +1,4 @@
+#!/bin/sh
+# Wait until the USB gadget serial port exists, then hand over to getty.
+while [ ! -e /dev/ttyGS0 ]; do sleep 5; done
+exec /sbin/getty -L ttyGS0 115200 vt100

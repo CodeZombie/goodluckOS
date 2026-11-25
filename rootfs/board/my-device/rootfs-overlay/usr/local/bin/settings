@@ -1,0 +1,74 @@
+#!/usr/bin/env luajit
+-- settings: System settings shell utility
+--
+--   settings get <name>          print current value
+--   settings set <name> <value>  apply a value
+--   settings schema [<name>]     print ini-style schema for one/all settings
+--
+-- Exit codes: 0 ok, 1 error (message on stderr)
+
+local argparse = require("argparse")
+local settings = require("libsettings")
+local cjson = require("cjson")
+
+local function in_array(needle, haystack)
+    -- returns true if needle exists in the array haystack.
+    for _, value in ipairs(haystack) do
+        if value == needle then
+            return true
+        end
+    end
+    return false
+end
+
+local function make_table_safe(table)
+    -- makes a table of data (and all child tables) safe for cjson encoding.
+    local safe_table = {}
+    for key, value in ipairs(table) do
+        if type(value) == "table" then
+            safe_table[key] = make_table_safe(value)
+        elseif not in_array(type(value), { "function", "lightuserdata", "thread", "userdata" }) then
+            safe_table[key] = value
+        end
+    end
+    return safe_table
+end
+
+local parser = argparse("settings", "Headless system settings interface.")
+parser:command_target("command")
+
+local c_get = parser:command("get", "Print the current value of a setting.")
+c_get:argument("id", "Setting id.")
+
+local c_set = parser:command("set", "Set a setting to a new value.")
+c_set:argument("id", "Setting id.")
+c_set:argument("value", "New value.")
+
+local c_schema = parser:command("schema", "Print json-style schema for all settings, or one.")
+c_schema:argument("name", "Setting id."):args("?")
+
+local args = parser:parse()
+
+local ok, err = pcall(function()
+    if args.command == "get" then
+        print(settings.get(args.id))
+    elseif args.command == "set" then
+        local new_value, err = settings.set(args.id, args.value)
+        if err then
+            error(err, 0)
+        end
+        print(new_value)
+    elseif args.command == "schema" then
+        if args.name then
+            print(cjson.encode(make_table_safe(settings.settings[args.name])))
+        else
+            print(cjson.encode(make_table_safe(settings.settings)))
+        end
+    end
+    os.exit(0)
+end)
+
+if not ok then
+  io.stderr:write("settings: " .. tostring(err) .. "\n")
+  os.exit(1)
+end

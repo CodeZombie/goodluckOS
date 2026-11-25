@@ -1,0 +1,9 @@
+config BR2_PACKAGE_INI_LUA
+	bool "ini-lua"
+	depends on BR2_PACKAGE_LUAJIT
+	help
+
+	  https://github.com/lzubiaur/ini.lua
+
+comment "ini-lua needs LuaJIT"
+	depends on !BR2_PACKAGE_LUAJIT

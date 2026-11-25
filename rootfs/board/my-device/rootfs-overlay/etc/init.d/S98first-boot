@@ -1,0 +1,23 @@
+#!/bin/sh
+# Starts the glos-setup application before appd on the very first boot.
+FLAG="/etc/first-boot-completed"
+case "$1" in
+  start)
+    if [ ! -f "$FLAG" ]; then
+        echo "Starting initial-setup"
+
+        /usr/local/bin/initial-setup
+
+        touch "$FLAG"
+        sync
+    fi
+    ;;
+  stop)
+    ;;
+  *)
+    echo "Usage: $0 {start|stop}"
+    exit 1
+    ;;
+esac
+
+exit 0

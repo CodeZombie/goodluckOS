@@ -3,8 +3,8 @@
 # dsperate
 #
 ################################################################################
-
-DSPERATE_VERSION = main
+# ecb27c96a80dd2c4bf31a0316f9eef9354d73e04 == v3.4.1
+DSPERATE_VERSION = ecb27c96a80dd2c4bf31a0316f9eef9354d73e04
 DSPERATE_SITE = $(call github,beebono,DSperate,$(DSPERATE_VERSION))
 DSPERATE_LICENSE = GPL-3.0-or-later
 DSPERATE_LICENSE_FILES = LICENSE

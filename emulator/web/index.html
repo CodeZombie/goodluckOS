@@ -1,0 +1,310 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>A33 DevKit emulator</title>
+<style>
+  :root {
+    --page: #181b26;
+    --shell: #3b4163;
+    --shell-hi: #484f78;
+    --shell-lo: #2d3250;
+    --bezel: #0e1017;
+    --key: #262a40;
+    --key-down: #14172a;
+    --ink: #e9ebf5;
+    --ink-dim: #9aa0bd;
+    --amber: #e8c27a;
+    --sage: #8fb8a8;
+    --rose: #c98fa0;
+    --sky: #8aa4d6;
+    --ok: #8fb8a8;
+    --bad: #c98fa0;
+    --screen-aspect: 4 / 3;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    background: var(--page);
+    color: var(--ink);
+    font: 15px/1.4 ui-rounded, "Avenir Next", "Segoe UI", system-ui, sans-serif;
+    display: grid;
+    place-items: center;
+    padding: max(12px, env(safe-area-inset-top)) 12px max(12px, env(safe-area-inset-bottom));
+    -webkit-user-select: none; user-select: none;
+    touch-action: manipulation;
+  }
+
+  .device {
+    width: min(1180px, 100%);
+    background: linear-gradient(180deg, var(--shell-hi), var(--shell) 18%, var(--shell-lo));
+    border-radius: 34px 34px 48px 48px;
+    padding: 22px 26px 26px;
+    box-shadow: 0 2px 0 #5b6392 inset, 0 -6px 0 #20243b inset, 0 30px 60px #0008;
+    display: grid;
+    grid-template-columns: minmax(150px, 1fr) minmax(0, 2.4fr) minmax(150px, 1fr);
+    grid-template-areas:
+      "l      screen r"
+      "left   screen right"
+      "select screen start"
+      "bar    bar    bar";
+    column-gap: 22px; row-gap: 10px;
+    align-items: center;
+  }
+
+  /* screen */
+  .bezel {
+    grid-area: screen;
+    background: var(--bezel);
+    border-radius: 14px;
+    padding: 14px;
+    box-shadow: 0 0 0 3px #1c2033, 0 3px 0 3px #5b6392 inset, inset 0 10px 30px #000a;
+  }
+  #screen {
+    width: 100%;
+    aspect-ratio: var(--screen-aspect);
+    background: #000;
+    border-radius: 4px;
+    overflow: hidden;
+    position: relative;
+  }
+  #screen > div { position: absolute !important; inset: 0; }
+  #overlay {
+    position: absolute; inset: 0; display: grid; place-content: center; text-align: center;
+    padding: 20px; gap: 6px; color: var(--ink-dim); pointer-events: none; z-index: 2; background: #000;
+  }
+  #overlay strong { color: var(--ink); font-size: 1.05rem; font-weight: 600; }
+  #overlay[hidden] { display: none; }
+
+  /* shoulder, d-pad, face keys */
+  .shoulder { height: 38px; width: 100%; border-radius: 22px 22px 8px 8px; font-weight: 600; }
+  #l { grid-area: l; } #r { grid-area: r; }
+  .dpad {
+    grid-area: left; justify-self: center;
+    display: grid; grid-template: repeat(3, 1fr) / repeat(3, 1fr);
+    width: min(168px, 100%); aspect-ratio: 1; gap: 0;
+  }
+  .dpad button { border-radius: 8px; font-size: 1.1rem; }
+  .dpad [data-btn=up]    { grid-area: 1 / 2; border-radius: 10px 10px 2px 2px; }
+  .dpad [data-btn=left]  { grid-area: 2 / 1; border-radius: 10px 2px 2px 10px; }
+  .dpad [data-btn=right] { grid-area: 2 / 3; border-radius: 2px 10px 10px 2px; }
+  .dpad [data-btn=down]  { grid-area: 3 / 2; border-radius: 2px 2px 10px 10px; }
+  .dpad::before { content: ""; grid-area: 2 / 2; background: var(--key); }
+
+  .face {
+    grid-area: right; justify-self: center;
+    display: grid; grid-template: repeat(3, 1fr) / repeat(3, 1fr);
+    width: min(168px, 100%); aspect-ratio: 1;
+  }
+  .face button { border-radius: 50%; width: 100%; aspect-ratio: 1; font-weight: 700; font-size: 1.05rem; }
+  .face [data-btn=x] { grid-area: 1 / 2; color: var(--sky); }
+  .face [data-btn=y] { grid-area: 2 / 1; color: var(--sage); }
+  .face [data-btn=a] { grid-area: 2 / 3; color: var(--amber); }
+  .face [data-btn=b] { grid-area: 3 / 2; color: var(--rose); }
+
+  .pill { height: 30px; border-radius: 15px; font-size: .82rem; padding: 0 16px; }
+  #select { grid-area: select; justify-self: start; }
+  #start  { grid-area: start;  justify-self: end; }
+
+  /* all hardware keys */
+  [data-btn] {
+    appearance: none; border: 0; cursor: pointer; font: inherit;
+    background: var(--key); color: var(--ink);
+    box-shadow: 0 3px 0 #11142a, 0 5px 8px #0006;
+    transition: transform .05s, box-shadow .05s, background .05s;
+  }
+  [data-btn].down, [data-btn]:active {
+    background: var(--key-down); transform: translateY(2px);
+    box-shadow: 0 1px 0 #11142a, inset 0 2px 6px #000a;
+  }
+  [data-btn]:focus-visible, .tool:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
+
+  /* status bar */
+  .bar {
+    grid-area: bar; display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: center;
+    margin-top: 8px; padding-top: 14px; border-top: 1px solid #ffffff18; color: var(--ink-dim); font-size: .88rem;
+  }
+  .status { display: inline-flex; align-items: center; gap: 8px; color: var(--ink); }
+  .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--bad); }
+  .dot.on { background: var(--ok); }
+  .bar .spacer { flex: 1; }
+  .tool {
+    appearance: none; border: 1px solid #ffffff30; background: transparent; color: var(--ink);
+    border-radius: 8px; padding: 5px 12px; cursor: pointer; font: inherit; font-size: .85rem; box-shadow: none;
+  }
+  .tool:hover { background: #ffffff12; }
+  code { font: .85em ui-monospace, "SF Mono", Menlo, Consolas, monospace; color: var(--ink); }
+
+  /* narrow: screen on top, controls underneath */
+  @media (max-width: 820px) {
+    .device {
+      grid-template-columns: 1fr 1fr;
+      grid-template-areas:
+        "screen screen"
+        "l      r"
+        "left   right"
+        "select start"
+        "bar    bar";
+      padding: 14px; border-radius: 26px 26px 36px 36px;
+    }
+    .bezel { padding: 8px; }
+  }
+  @media (prefers-reduced-motion: reduce) { [data-btn] { transition: none; } }
+</style>
+</head>
+<body>
+<main class="device" id="device">
+  <button class="shoulder" id="l" data-btn="l">L</button>
+  <button class="shoulder" id="r" data-btn="r">R</button>
+
+  <div class="dpad" role="group" aria-label="Directional pad">
+    <button data-btn="up" aria-label="Up">▲</button>
+    <button data-btn="left" aria-label="Left">◀</button>
+    <button data-btn="right" aria-label="Right">▶</button>
+    <button data-btn="down" aria-label="Down">▼</button>
+  </div>
+
+  <div class="bezel">
+    <div id="screen">
+      <div id="overlay"><strong id="ov-title">Starting emulator…</strong><span id="ov-text">Waiting for the display.</span></div>
+    </div>
+  </div>
+
+  <div class="face" role="group" aria-label="Face buttons">
+    <button data-btn="x" aria-label="X">X</button>
+    <button data-btn="y" aria-label="Y">Y</button>
+    <button data-btn="a" aria-label="A">A</button>
+    <button data-btn="b" aria-label="B">B</button>
+  </div>
+
+  <button class="pill" id="select" data-btn="select">Select</button>
+  <button class="pill" id="start"  data-btn="start">Start</button>
+
+  <div class="bar">
+    <span class="status"><span class="dot" id="dot"></span><span id="state">Connecting…</span></span>
+    <span id="hint">Keyboard: arrows, <code id="k-a">Z</code> A, <code id="k-b">X</code> B — mapped in <code>emulator/web/buttons.json</code></span>
+    <span class="spacer"></span>
+    <button class="tool" id="menu"  data-btn="menu">Menu key</button>
+    <button class="tool" id="shot">Screenshot</button>
+    <button class="tool" id="full">Fullscreen</button>
+  </div>
+</main>
+
+<script type="module">
+import RFB from "./novnc/core/rfb.js";
+
+const $ = (s) => document.querySelector(s);
+const screenEl = $("#screen"), overlay = $("#overlay");
+
+// ── key tables ──────────────────────────────────────────────────────────────────
+const SPECIAL = {
+  ArrowUp: 0xff52, ArrowDown: 0xff54, ArrowLeft: 0xff51, ArrowRight: 0xff53,
+  Enter: 0xff0d, Escape: 0xff1b, Space: 0x20, Tab: 0xff09, Backspace: 0xff08,
+  ShiftLeft: 0xffe1, ShiftRight: 0xffe2, ControlLeft: 0xffe3, ControlRight: 0xffe4,
+  AltLeft: 0xffe9, AltRight: 0xffea, PageUp: 0xff55, PageDown: 0xff56,
+  Home: 0xff50, End: 0xff57, Insert: 0xff63, Delete: 0xffff,
+};
+function keysymFor(code) {
+  if (code in SPECIAL) return SPECIAL[code];
+  let m;
+  if ((m = /^Key([A-Z])$/.exec(code)))   return m[1].toLowerCase().charCodeAt(0);
+  if ((m = /^Digit(\d)$/.exec(code)))    return m[1].charCodeAt(0);
+  if ((m = /^F(\d{1,2})$/.exec(code)))   return 0xffbe + (+m[1] - 1);
+  return 0;
+}
+const pretty = (code) => code.replace(/^Key|^Digit|^Arrow/, "");
+
+// ── config ──────────────────────────────────────────────────────────────────────
+const [cfg, scr] = await Promise.all([
+  fetch("buttons.json").then(r => r.json()).catch(() => ({ buttons: {} })),
+  fetch("screen.json").then(r => r.json()).catch(() => ({ width: 640, height: 480 })),
+]);
+document.documentElement.style.setProperty("--screen-aspect", `${scr.width} / ${scr.height}`);
+if (cfg.title) document.title = `${cfg.title} - DevKit emulator`;
+
+const byCode = new Map();
+document.querySelectorAll("[data-btn]").forEach((el) => {
+  const def = cfg.buttons?.[el.dataset.btn];
+  if (!def) return;
+  if (def.label && !el.classList.contains("tool") && !el.closest(".dpad")) el.textContent = def.label;
+  el.dataset.code = def.code;
+  byCode.set(def.code, el);
+});
+if (cfg.buttons?.a) $("#k-a").textContent = pretty(cfg.buttons.a.code);
+if (cfg.buttons?.b) $("#k-b").textContent = pretty(cfg.buttons.b.code);
+
+// ── connection with auto-retry ──────────────────────────────────────────────────
+let rfb = null, retry = null;
+function setState(on, text, title, body) {
+  $("#dot").classList.toggle("on", on);
+  $("#state").textContent = text;
+  overlay.hidden = on;
+  if (!on) { $("#ov-title").textContent = title; $("#ov-text").textContent = body; }
+}
+function connect() {
+  clearTimeout(retry);
+  screenEl.querySelectorAll(":scope > div:not(#overlay)").forEach((n) => n.remove());
+  const url = `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/websockify`;
+  rfb = new RFB(screenEl, url, { shared: true });
+  rfb.scaleViewport = true;
+  rfb.clipViewport = false;
+  rfb.background = "#000";
+  rfb.addEventListener("connect", () => setState(true, "Connected"));
+  rfb.addEventListener("disconnect", (e) => {
+    rfb = null;
+    setState(false, "Disconnected", e.detail.clean ? "Emulator stopped" : "Can’t reach the emulator",
+      "Retrying every 2 seconds. Check the container logs if this persists.");
+    retry = setTimeout(connect, 2000);
+  });
+}
+setState(false, "Connecting…", "Starting emulator…", "Waiting for the display.");
+connect();
+
+// ── button presses ──────────────────────────────────────────────────────────────
+const held = new Set();
+function press(el, down) {
+  const code = el.dataset.code;
+  if (!code) return;
+  if (down === held.has(code)) return;
+  down ? held.add(code) : held.delete(code);
+  el.classList.toggle("down", down);
+  rfb?.sendKey(keysymFor(code), code, down);
+}
+document.querySelectorAll("[data-btn]").forEach((el) => {
+  el.addEventListener("pointerdown", (e) => { e.preventDefault(); el.setPointerCapture(e.pointerId); press(el, true); });
+  for (const t of ["pointerup", "pointercancel", "lostpointercapture"])
+    el.addEventListener(t, () => press(el, false));
+  el.addEventListener("contextmenu", (e) => e.preventDefault());
+  el.addEventListener("keydown", (e) => { if (e.code === "Space") e.preventDefault(); }); // Space must not "click" buttons
+});
+
+// Host keyboard -> guest, for mapped keys, when the VNC canvas doesn't already have focus.
+function kb(e, down) {
+  if (screenEl.contains(e.target) || e.repeat || e.ctrlKey || e.metaKey) return;
+  const el = byCode.get(e.code);
+  if (!el) return;
+  e.preventDefault();
+  press(el, down);
+}
+addEventListener("keydown", (e) => kb(e, true));
+addEventListener("keyup",   (e) => kb(e, false));
+addEventListener("blur", () => document.querySelectorAll("[data-btn].down").forEach((el) => press(el, false)));
+
+// ── tools ───────────────────────────────────────────────────────────────────────
+$("#full").addEventListener("click", () => {
+  document.fullscreenElement ? document.exitFullscreen() : $("#device").requestFullscreen?.();
+});
+$("#shot").addEventListener("click", () => {
+  if (!rfb?.toBlob) return;
+  rfb.toBlob((blob) => {
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `a33-screenshot-${new Date().toISOString().replace(/[:.]/g, "-")}.png`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  }, "image/png");
+});
+</script>
+</body>
+</html>

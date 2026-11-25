@@ -1,0 +1,39 @@
+#!/bin/sh
+# udhcpc on usb0 (S30usb-gadget): the address a PC or phone that shares its internet hands out, with its route
+# and DNS. Unlike the default script, it leaves the console's own 192.168.36.1 on usb0.
+LEASE=/run/udhcpc.usb0.lease
+RESOLV=/etc/resolv.conf
+
+# resolv.conf may be a symlink to /tmp, so it is rewritten, not replaced
+drop_dns() {
+    t=$(mktemp)
+    grep -vE "# $interface\$" $RESOLV > "$t" 2>/dev/null
+    cat "$t" > $RESOLV
+    rm -f "$t"
+}
+
+drop_lease() {
+    [ -f $LEASE ] && ip addr del "$(cat $LEASE)" dev "$interface" 2>/dev/null
+    rm -f $LEASE
+    while ip route del default dev "$interface" 2>/dev/null; do :; done
+}
+
+case "$1" in
+    deconfig)
+        ip link set "$interface" up
+        drop_lease
+        drop_dns
+        ;;
+    renew|bound)
+        new="$ip/${mask:-${subnet:-24}}"
+        if [ "$(cat $LEASE 2>/dev/null)" != "$new" ]; then
+            drop_lease
+            ip addr add "$new" dev "$interface" && echo "$new" > $LEASE
+        fi
+        while ip route del default dev "$interface" 2>/dev/null; do :; done
+        for r in $router; do ip route add default via "$r" dev "$interface" && break; done
+        drop_dns
+        for d in $dns; do echo "nameserver $d # $interface" >> $RESOLV; done
+        ;;
+esac
+exit 0

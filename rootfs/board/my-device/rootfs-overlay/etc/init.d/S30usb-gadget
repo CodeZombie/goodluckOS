@@ -19,7 +19,7 @@ serial_only() {
 }
 
 stop_daemons() {
-    for pidfile in /run/umtprd.pid /run/udhcpd.pid; do
+    for pidfile in /run/umtprd.pid /run/udhcpd.pid /run/udhcpc.usb0.pid; do
         [ -f $pidfile ] || continue
         pid=$(cat $pidfile)
         kill "$pid" 2>/dev/null
@@ -41,7 +41,7 @@ unbind() {
     done
 }
 
-# Stop umtprd/udhcpd and remove the MTP and network functions of an unbound gadget.
+# Stop umtprd/udhcpd/udhcpc and remove the MTP and network functions of an unbound gadget.
 # The serial function stays: removing it waits until ttyGS0 is closed, and getty keeps it open.
 remove_mode_functions() {
     stop_daemons
@@ -95,6 +95,10 @@ case "$1" in
     if [ "$MODE" = network ]; then
         # Network: the PC gets a USB Ethernet interface (CDC NCM)
         mkdir -p functions/ncm.usb0
+        # Fixed addresses from the card's id, so the PC keeps the adapter, and its sharing, between boots
+        id=$(cut -c17-26 /sys/block/mmcblk0/device/cid 2>/dev/null | sed 's/../&:/g;s/:$//')
+        echo "02:${id:-00:00:00:00:01}" > functions/ncm.usb0/dev_addr
+        echo "06:${id:-00:00:00:00:01}" > functions/ncm.usb0/host_addr
         ln -s functions/ncm.usb0 configs/c.1/
         # Windows binds its in-box NCM driver (UsbNcm) only to the WINNCM compatible ID
         echo 1 > os_desc/use
@@ -127,6 +131,10 @@ case "$1" in
         ip addr add 192.168.36.1/24 dev usb0
         ip link set usb0 up
         start-stop-daemon -S -q -b -m -d / -p /run/udhcpd.pid -x /usr/sbin/udhcpd -- -f
+        # A PC or phone that shares its internet hands out an address of its own: udhcpc takes it,
+        # next to 192.168.36.1, and asks again every minute while nothing answers
+        start-stop-daemon -S -q -b -m -d / -p /run/udhcpc.usb0.pid -x /sbin/udhcpc -- -f -i usb0 -R \
+            -s /usr/share/udhcpc/usb0.script -t 3 -T 3 -A 60 -x hostname:goodluckOS
     elif [ -L configs/c.1/ffs.mtp ]; then
         # The bind can succeed and the PC still not enumerate the device. With a cable in,
         # a working gadget reaches "configured" in a second or two; give it 15s.

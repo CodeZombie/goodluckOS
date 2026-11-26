@@ -9,6 +9,7 @@ services:
       - ./:/tests:z            # tests + results/ (serial logs) land on the host
     ports:
       - "5900:5900"
+      - "5556:5556"
       - "127.0.0.1:${WEB_PORT:-8080}:8080"
     devices:
       - "/dev/dri/renderD128:/dev/dri/renderD128"

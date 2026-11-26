@@ -13,4 +13,6 @@ source "../package/glos-setup/Config.in"
 source "../package/dsperate/Config.in"
 source "../package/ini-lua/Config.in"
 source "../package/menui/Config.in"
+source "../package/libubox-lua/Config.in"
+source "../package/libubus-lua/Config.in"
 endmenu

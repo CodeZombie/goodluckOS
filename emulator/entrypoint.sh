@@ -28,17 +28,6 @@ rm -rf "$STAGE"
 
 echo ">> Starting emulator..."
 
-# Exit with `Ctrl a` + `x`
-# exec qemu-system-arm -M virt,highmem=off -cpu cortex-a15 -m 512M -smp 4 -nic none \
-#     -kernel /inputs/kernel \
-#     -append "root=/dev/vda rw console=ttyAMA0 earlycon" \
-#     -drive if=none,file="$ROOTFS_IMG",id=disk,format=raw \
-#     -device virtio-blk-pci,drive=disk \
-#     -device virtio-gpu-pci,xres=720,yres=720 \
-#     -device virtio-keyboard-pci \
-#     -serial mon:stdio \
-#     -display none \
-#     -vnc 0.0.0.0:0
 
 QEMU=(exec qemu-system-arm -M virt,highmem=off -cpu max -m 512M -smp 4 -nic none
     -kernel /inputs/kernel
@@ -47,7 +36,9 @@ QEMU=(exec qemu-system-arm -M virt,highmem=off -cpu max -m 512M -smp 4 -nic none
     -device virtio-blk-pci,drive=disk
     -device virtio-gpu-gl-pci,xres="$SCREEN_W",yres="$SCREEN_H"
     -device virtio-keyboard-pci
-    -display egl-headless,rendernode=/dev/dri/renderD128 \
+    -display egl-headless,rendernode=/dev/dri/renderD128
+    -chardev "socket,id=ser0,host=0.0.0.0,port=5556,server=on,wait=off,logfile=/dev/stdout,logappend=on"
+    -serial chardev:ser0
     -serial mon:stdio
     -vnc 0.0.0.0:0
 )

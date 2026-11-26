@@ -1,0 +1,74 @@
+#!/bin/sh
+
+DAEMON="settingsd"
+DAEMON_PATH="/usr/local/bin/settingsd"
+
+[ -x "$DAEMON_PATH" ] || exit 0
+
+start() {
+    printf "Starting %s: " "$DAEMON"
+    if pidof "$DAEMON" >/dev/null; then
+        echo "already running"
+        return 0
+    fi
+
+    "$DAEMON_PATH" >/dev/null 2>&1 &
+}
+
+status() {
+    if pidof "$DAEMON" >/dev/null; then
+        echo "running"
+    else
+        echo "not running"
+        return 1
+    fi
+}
+
+stop() {
+    printf "Stopping %s: " "$DAEMON"
+    if ! pidof "$DAEMON" >/dev/null; then
+        echo "not running"
+        return 0
+    fi
+
+    killall "$DAEMON" 2>/dev/null
+
+    # Wait up to 3 seconds for clean exit
+    for i in 1 2 3; do
+        pidof "$DAEMON" >/dev/null || break
+        sleep 1
+    done
+
+    # Force kill if it's still not dead
+    if pidof "$DAEMON" >/dev/null; then
+        killall -9 "$DAEMON" 2>/dev/null
+    fi
+
+    echo "OK"
+}
+
+restart() {
+    stop
+    start
+}
+
+case "$1" in
+    start)
+        start
+        ;;
+    stop)
+        stop
+        ;;
+    restart)
+        restart
+        ;;
+    status)
+        status
+        ;;
+    *)
+        echo "Usage: $0 {start|stop|restart|status}"
+        exit 1
+        ;;
+esac
+
+exit $?

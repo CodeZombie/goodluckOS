@@ -3,38 +3,28 @@
 --
 --   settings get <name>          print current value
 --   settings set <name> <value>  apply a value
---   settings schema [<name>]     print ini-style schema for one/all settings
+--   settings schema [<name>]     print json schema for one/all settings
 --
 -- Exit codes: 0 ok, 1 error (message on stderr)
 
 local argparse = require("argparse")
-local settings = require("libsettings")
 local cjson = require("cjson")
+local ubus = require("ubus")
 
-local function in_array(needle, haystack)
-    -- returns true if needle exists in the array haystack.
-    for _, value in ipairs(haystack) do
-        if value == needle then
-            return true
-        end
+local conn
+
+local function send_command(args)
+    local res = conn:call(args.path, args.command, args.args)
+    if res.status == "ok" then
+        return res.response, nil
     end
-    return false
+    if res.response then
+        return nil, res.response
+    end
+    return nil, "Failed, an unknown error occurred."
 end
 
-local function make_table_safe(table)
-    -- makes a table of data (and all child tables) safe for cjson encoding.
-    local safe_table = {}
-    for key, value in ipairs(table) do
-        if type(value) == "table" then
-            safe_table[key] = make_table_safe(value)
-        elseif not in_array(type(value), { "function", "lightuserdata", "thread", "userdata" }) then
-            safe_table[key] = value
-        end
-    end
-    return safe_table
-end
-
-local parser = argparse("settings", "Headless system settings interface.")
+local parser = argparse("settings", "System settings interface")
 parser:command_target("command")
 
 local c_get = parser:command("get", "Print the current value of a setting.")
@@ -45,30 +35,45 @@ c_set:argument("id", "Setting id.")
 c_set:argument("value", "New value.")
 
 local c_schema = parser:command("schema", "Print json-style schema for all settings, or one.")
-c_schema:argument("name", "Setting id."):args("?")
+c_schema:argument("id", "Setting id."):args("?")
 
 local args = parser:parse()
 
 local ok, err = pcall(function()
-    if args.command == "get" then
-        print(settings.get(args.id))
-    elseif args.command == "set" then
-        local new_value, err = settings.set(args.id, args.value)
-        if err then
-            error(err, 0)
-        end
-        print(new_value)
-    elseif args.command == "schema" then
-        if args.name then
-            print(cjson.encode(make_table_safe(settings.settings[args.name])))
-        else
-            print(cjson.encode(make_table_safe(settings.settings)))
-        end
+    conn = ubus.connect()
+    if not conn then
+        error("Failed to connect to ubusd")
     end
-    os.exit(0)
+
+    command_args = {}
+    if args.value then
+        command_args.value = args.value
+    end
+
+    local path
+    if args.command == "schema" and not args.id then
+        path = "settings"
+    else
+        path = string.format("settings.%s", args.id)
+    end
+
+    local response, err = send_command{path = path, command=args.command, args=command_args}
+    if err then
+        error(err, 0)
+    end
+
+    if type(response) == "table" then
+        print(cjson.encode(response))
+    else
+        print(response)
+    end
 end)
+
+conn:close()
 
 if not ok then
   io.stderr:write("settings: " .. tostring(err) .. "\n")
   os.exit(1)
+else
+    os.exit(0)
 end

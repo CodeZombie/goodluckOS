@@ -1,0 +1,17 @@
+config BR2_PACKAGE_LIBUBUS_LUA
+	bool "libubus-lua"
+	depends on BR2_PACKAGE_HAS_LUAINTERPRETER
+	depends on BR2_PACKAGE_LUAJIT
+	depends on !BR2_STATIC_LIBS # dlopen / Lua C modules
+	select BR2_PACKAGE_LIBUBOX
+	select BR2_PACKAGE_UBUS
+	help
+	  Lua bindings (ubus.so) for OpenWrt's micro-bus architecture
+	  (ubus).
+
+	  https://git.openwrt.org/project/ubus.git
+
+comment "libubus-lua needs Lua 5.1 or LuaJIT and dynamic library support"
+	depends on !BR2_PACKAGE_HAS_LUAINTERPRETER || \
+		!(BR2_PACKAGE_LUAJIT) || \
+		BR2_STATIC_LIBS

@@ -1,10 +1,8 @@
 -- libsettings
 -- The I/O backbone of shared system settings not already covered by another application.
--- If you want to read or write a system setting, you will do so through this script.
---
--- NOTE: if you're writing non-lua code and want to interact with this library, you can use the
--- `settings` application to read and write settings. See `/usr/local/bin/settings`.
---
+-- This library should probably not be used directly in your application code, as some of the settings need
+-- to be run as root to set correctly.
+-- Instead, use ubus, or the `settings` cli utility.
 
 local MIXER      = "Speaker"                       -- ALSA simple mixer control
 local BACKLIGHT  = "/sys/class/backlight/backlight"
@@ -284,7 +282,7 @@ local SETTINGS = {
             return capacity
         end,
     },
-    low_battery_alert = {
+    ["low-battery-alert"] = {
         id = "low-battery-alert",
         name = "Low Battery Alert",
         type = "int",
@@ -332,7 +330,7 @@ local SETTINGS = {
             return parsed_value, nil
         end,
     },
-    cpu_governor = {
+    ["cpu-governor"] = {
         id = "cpu-governor",
         name = "CPU Governor",
         type = "select",
@@ -362,7 +360,7 @@ local SETTINGS = {
             return parsed_value, nil
         end,
     },
-    gpu_driver = {
+    ["gpu-driver"] = {
         id = "gpu-driver",
         name = "GPU Driver",
         type = "select",
@@ -383,7 +381,7 @@ local SETTINGS = {
             return parsed_value, nil
         end,
     },
-    time_second = {
+    ["time-second"] = {
         id = "time-second",
         name = "Time Second",
         type = "int",
@@ -397,7 +395,7 @@ local SETTINGS = {
             return parsed_value, nil
         end,
     },
-    time_minute = {
+    ["time-minute"] = {
         id = "time-minute",
         name = "Time Minute",
         type = "int",
@@ -411,7 +409,7 @@ local SETTINGS = {
             return parsed_value, nil
         end,
     },
-    time_hour = {
+    ["time-hour"] = {
         id = "time-hour",
         name = "Time Hour",
         type = "int",
@@ -425,7 +423,7 @@ local SETTINGS = {
             return parsed_value, nil
         end,
     },
-    date_day = {
+    ["date-day"] = {
         id = "date-day",
         name = "Date Day",
         type = "int",
@@ -439,7 +437,7 @@ local SETTINGS = {
             return parsed_value, nil
         end,
     },
-    date_month = {
+    ["date-month"] = {
         id = "date-month",
         name = "Date Month",
         type = "select",
@@ -452,7 +450,7 @@ local SETTINGS = {
             return parsed_value, nil
         end,
     },
-    date_year = {
+    ["date-year"] = {
         id = "date-year",
         name = "Date Year",
         type = "int",

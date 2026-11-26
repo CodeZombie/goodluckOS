@@ -1,39 +1,68 @@
 #!/usr/bin/env luajit
 
 local menui = require("menui")
-local settings = require("libsettings")
+local ubus = require("ubus")
 
--- get and cache current setting values
-for _, setting in pairs(settings.settings) do
-    -- we're going to give `setting` a new key, 'value' to act as a cached copy of whatever 'get' returns.
-    -- This is going to be very useful for our immediate mode renderer, which needs to read the setting value almost constantly.
-    -- We just have to make sure we manually update `setting.value` whenever we change the setting.
-    -- Some settings will naturally change on their own though (like time->minutes)
-    -- In those cases we should have some timer periodically updating the cached value in the background and then call `menui:render()`
-    setting.value = setting:get()
+local conn = ubus.connect()
+
+local function send_command(path, command, args)
+    if not args then args = {} end
+    local res = conn:call(path, command, args)
+    if res.status == "ok" then
+        return res.response, nil
+    end
+    if res.response then
+        return nil, res.response
+    end
+    return nil, "Failed, an unknown error occurred."
 end
 
-local setting_error = ""
+-- settings cache
+local setting_value_cache = {}
+local function get_setting_value(id)
+    if not setting_value_cache[id] then
+        local response, err = send_command(string.format("settings.%s", id), "get")
+        if err then
+            menui:push_page("error", {setting_id=id, error_message = err, mode="get"})
+            response = "???"
+        end
+        setting_value_cache[id] = response
+    end
+    return setting_value_cache[id]
+end
+local function invalidate_setting_cache_value(id)
+    setting_value_cache[id] = nil
+end
 
-local Context = {
-    tf2_mounted = true
-}
+-- settings schema
+local settings_schema, err = send_command("settings", "schema")
+if err then
+    print("Failed to fetch settings schema")
+    conn:close()
+    error(err, 0)
+end
+
+
+local function set_setting(id, value)
+    if not setting_value_cache[id] then
+        local response, err = send_command(string.format("settings.%s", id), "set", {value=value})
+        if err then
+            menui:push_page("error", {setting_id=id, error_message = err, mode="set"})
+            return
+        end
+        setting_value_cache[id] = value
+    end
+end
 
 local function menui_element_from_setting(setting)
     if setting.type == "int" then
         menui:number(setting.name, {
             label = setting.name,
-            value = setting.value,
+            value = get_setting_value(setting.id),
             min = setting.min,
             max = setting.max,
             on_change = function(new_value)
-                local set_value, err = settings.set(setting.id, new_value)
-                if err then
-                    setting_error = err
-                    menui:push_page("Error")
-                else
-                    setting.value = set_value
-                end
+                set_setting(setting.id, new_value)
             end
         })
     elseif setting.type == "bool" then
@@ -41,13 +70,7 @@ local function menui_element_from_setting(setting)
             label = setting.name,
             value = setting.value,
             on_change = function(new_value)
-                local set_value, err = settings.set(setting.id, new_value)
-                if err then
-                    setting_error = err
-                    menui:push_page("Error")
-                else
-                    setting.value = set_value
-                end
+                set_setting(setting.id, new_value)
             end,
         })
     elseif setting.type == "select" then
@@ -56,19 +79,14 @@ local function menui_element_from_setting(setting)
             value = setting.value,
             options = setting.options,
             on_change = function(_, new_value)
-                local set_value, err = settings.set(setting.id, new_value)
-                if err then
-                    setting_error = err
-                    menui:push_page("Error")
-                else
-                    setting.value = set_value
-                end
+                set_setting(setting.id, new_value)
             end
         })
     end
 end
 
-local setting_ids = { "volume", "mute", "brightness", "low_battery_alert", "language" }
+local setting_ids = { "volume", "mute", "brightness", "low-battery-alert", "language" }
+local date_setting_ids = { "date-day", "date-month", "date-year", "time-hour", "time-minute", "time-second" }
 
 menui:start("Settings", function()
     menui:page("main-page", {
@@ -94,14 +112,15 @@ menui:start("Settings", function()
             })
 
             for _, setting_id in ipairs(setting_ids) do
-                menui_element_from_setting(settings.settings[setting_id])
+                menui_element_from_setting(settings_schema[setting_id])
             end
         end,
     })
 
-    menui:page("Error", {
-        on_render=function()
-            menui:label("error-label", { label = setting_error, align="right", icon="⚠️" })
+    menui:page("error", {
+        label="Error",
+        on_render=function(context)
+            menui:label("error-label", { label = context.error_message, align="right", icon="⚠️" })
             menui:button("back-button", {
                 label = "Back",
                 on_a_press_description = "Go back",
@@ -164,10 +183,11 @@ menui:start("Settings", function()
     menui:page("date-and-time-page", {
         label="Date & Time",
         on_render=function()
-            local date_setting_ids = { "date-day", "date-month", "date-year", "time-hour", "time-minute", "time-second" }
             for _, setting_id in ipairs(date_setting_ids) do
-                menui_element_from_setting(settings.get(setting_id))
+                menui_element_from_setting(settings_schema[setting_id])
             end
         end,
     })
 end)
+
+conn:close()

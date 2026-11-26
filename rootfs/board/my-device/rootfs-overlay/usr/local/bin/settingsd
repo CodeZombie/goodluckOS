@@ -1,0 +1,101 @@
+#!/usr/bin/env lua
+
+local ubus = require("ubus")
+local uloop = require("uloop")
+local libsettings = require("libsettings")
+local cjson = require("cjson")
+
+local conn
+
+local function in_array(needle, haystack)
+    -- returns true if needle exists in the array-table haystack.
+    for _, value in ipairs(haystack) do
+        if value == needle then
+            return true
+        end
+    end
+    return false
+end
+
+local function make_table_safe(t)
+    -- makes a table (and all child tables) safe for cjson encoding.
+
+    local safe_table = {}
+    for key, value in pairs(t) do
+        if type(value) == "table" then
+            safe_table[key] = make_table_safe(value)
+        elseif not in_array(type(value), { "function", "lightuserdata", "thread", "userdata" }) then
+            safe_table[key] = value
+        end
+    end
+    return safe_table
+end
+
+local function ubus_response(req, callable)
+    local ok, res = pcall(callable)
+
+    if not ok then
+        conn:reply(req, {
+            response = tostring(res),
+            status = "fail"
+        })
+    else
+        conn:reply(req, {
+            response = res,
+            status = "ok"
+        })
+    end
+end
+
+local function ubus_type_from_libsettings_type(t)
+    if t == "int" then
+        return ubus.INT32
+    elseif t == "bool" then
+        return ubus.BOOL
+    elseif t == "string" or t == "select" then
+        return ubus.STRING
+    elseif t == "float" then
+        return ubus.DOUBLE
+    end
+    error(string.format("Settingsd error: Unknown libsettings type : %s", t), 0)
+end
+
+uloop.init()
+
+conn = ubus.connect()
+if not conn then
+    error("settingsd failed to connect to ubusd (is ubusd running?)")
+end
+
+local methods = {}
+
+for setting_id, setting in pairs(libsettings.settings) do
+    setting_methods = {}
+    if setting.get then
+        setting_methods.get = {
+            function(req, msg) ubus_response(req, function() return setting:get() end) end,
+            {}
+        }
+    end
+    if setting.set then
+        setting_methods.set = {
+            function(req, msg) ubus_response(req, function() return setting:set(msg.value) end) end,
+            {value = ubus_type_from_libsettings_type(setting.type)}
+        }
+    end
+    setting_methods.schema = {
+        function(req, msg) ubus_response(req, function() return make_table_safe(setting) end) end,
+        {}
+    }
+    methods[string.format("settings.%s", setting.id)] = setting_methods
+end
+
+methods["settings"] = {
+    schema = {
+        function(req, msg) ubus_response(req, function() return make_table_safe(libsettings.settings) end) end,
+        {}
+    }
+}
+
+conn:add(methods)
+uloop.run()

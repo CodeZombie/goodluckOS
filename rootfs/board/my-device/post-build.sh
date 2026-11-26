@@ -19,6 +19,7 @@ sed -i 's/^tty1::respawn/#tty1::respawn/' "${INITTAB}"
 
 # Modify the triggerhappy init.d script so that it runs as root instead of 'nobody'
 sed -i 's/ --user nobody//' "$TARGET_DIR"/etc/init.d/S*triggerhappy
+
 # Move triggerhappy daemon launch way later in the boot process.
 # It behaves badly when it's too early.
 if [ -f "$TARGET_DIR/etc/init.d/S10triggerhappy" ]; then

@@ -10,10 +10,13 @@ PUPPY_SITE_METHOD = local
 PUPPY_DEPENDENCIES = sdl2 sdl2_image sdl2_ttf
 
 define PUPPY_BUILD_CMDS
-	$(TARGET_CXX) $(TARGET_CXXFLAGS) \
-		-o $(@D)/puppy $(@D)/puppy.cpp \
-		$(TARGET_LDFLAGS) \
-		-lpthread -lSDL2 -lSDL2_image -lSDL2_ttf
+	$(TARGET_MAKE_ENV) $(MAKE) -C $(@D) \
+		AR="$(TARGET_AR)" \
+		CXX="$(TARGET_CXX)" \
+		CPPFLAGS="$(TARGET_CPPFLAGS)" \
+		CXXFLAGS="$(TARGET_CXXFLAGS)" \
+		LDFLAGS="$(TARGET_LDFLAGS)" \
+		BUILD_DIR="$(@D)/build" OUTPUT="$(@D)/puppy" all
 endef
 
 define PUPPY_INSTALL_TARGET_CMDS

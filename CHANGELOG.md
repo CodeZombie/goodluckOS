@@ -1,5 +1,6 @@
 ## [UNRELEASED]
 ### Added
+- USB networking: SSH, SCP and SFTP over the USB cable, switched on with `usb-mode.sh network`
 - Luajit + several lua libraries (lsqlite3, lua-sdl2, etc)
 - `sqlite3`
 - `app-cache/libappcachedb.lua` - A new system application which scans the fs and builds a sqlite3 database containing all applications and metadata.
@@ -15,6 +16,9 @@
 - `initial-setup` It's `glos-setup` but written with `menui`
 - `simpql.lua` A sqlite3 database generator - automatically generates schema/tables/views/triggers from a simple description.
 
+### Fixed
+- Shutdown and reboot no longer hang with the USB cable plugged in
+
 ### Changed
 - Updated `rootfs/scripts/` to keep downloaded packages and ccaches.
 - `kernel/` now uses .config files for kernel config flags instead of hardcoding them into the Dockerfile.
@@ -29,7 +33,6 @@
 - Moved ttyGS0's getty command into it's own script so we can check to see if GS0 even exists. This prevents terminal spam on devices whithout ttyGS0.
 - Rewrote `appctl` in Lua to make it actually readable and maintainable.
 - Launchers should now be given `.puppy` entries, as they can be correctly recognized by the app scanner as launchers.
-
 
 ## [0.1.0]  - 2026-10-10
 ### Added

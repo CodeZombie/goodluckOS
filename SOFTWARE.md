@@ -1,5 +1,9 @@
 # goodluckOS Ports/Software
 Thanks to the oustanding work by the goodluckOS community, we now have a growing catalogue of excellent ports and software available.
+## Software
+| Name | Author | Description | Link | 
+| ---- | ------ | ----------- | ---- |
+| Mediabox | lw10a | A small media player. Supports Music, Videos and PDF. | [https://github.com/lw10a/Mediabox-goodluckOS/releases/latest](https://github.com/lw10a/Mediabox-goodluckOS/releases/latest) |
 
 ## Launchers
 | Name | Author | Description | Link |

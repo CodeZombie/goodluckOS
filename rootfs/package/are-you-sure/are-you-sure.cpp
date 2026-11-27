@@ -2,6 +2,7 @@
 #include "imgui.h"
 #include "imgui_impl_sdl2.h"
 #include "imgui_impl_sdlrenderer2.h"
+#include "palette/palette.h"
 #include <cstdlib>
 #include <iostream>
 #include <string>
@@ -43,6 +44,19 @@ enum class AppState {
     Error
 };
 
+static ImVec4 imguiColor(SDL_Color color) {
+    return ImVec4(color.r / 255.0f, color.g / 255.0f,
+                  color.b / 255.0f, color.a / 255.0f);
+}
+
+static ImVec4 buttonHighlight(float amount) {
+    const auto tile = imguiColor(palette::kTile);
+    const auto accent = imguiColor(palette::kYellow);
+    return ImVec4(tile.x + (accent.x - tile.x) * amount,
+                  tile.y + (accent.y - tile.y) * amount,
+                  tile.z + (accent.z - tile.z) * amount, tile.w);
+}
+
 int main(int argc, char* argv[]) {
     if (argc < 3) {
         std::cerr << "Usage: are-you-sure \"<Message>\" \"<command>\"" << std::endl;
@@ -68,11 +82,21 @@ int main(int argc, char* argv[]) {
     ImGuiIO& io = ImGui::GetIO(); (void)io;
 
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;
+    io.ConfigNavCursorVisibleAlways = true;
 
     ImGui_ImplSDL2_InitForSDLRenderer(window, renderer);
     ImGui_ImplSDLRenderer2_Init(renderer);
 
-    ImGui::GetStyle().FontScaleMain = 1.65;
+    auto& style = ImGui::GetStyle();
+    style.FontScaleMain = 1.65;
+    style.Colors[ImGuiCol_Text] = imguiColor(palette::kWhite);
+    style.Colors[ImGuiCol_WindowBg] = imguiColor(palette::kClear);
+    style.Colors[ImGuiCol_ChildBg] = imguiColor(palette::kClear);
+    style.Colors[ImGuiCol_Button] = imguiColor(palette::kTile);
+    style.Colors[ImGuiCol_ButtonHovered] = buttonHighlight(0.18f);
+    style.Colors[ImGuiCol_ButtonActive] = buttonHighlight(0.30f);
+    style.Colors[ImGuiCol_NavCursor] = imguiColor(palette::kYellow);
+    style.Colors[ImGuiCol_Separator] = imguiColor(palette::kGrey);
 
     SDL_GameController* controller = nullptr;
     for (int i = 0; i < SDL_NumJoysticks(); ++i) {
@@ -87,10 +111,16 @@ int main(int argc, char* argv[]) {
     int exitCode = 0;
 
     bool running = true;
+    // ImGui applies the initial navigation request on the next frame.
+    int startupFrames = 2;
     while (running) {
         SDL_Event event;
 
-        if (SDL_WaitEvent(&event)) {
+        const bool gotEvent = startupFrames > 0
+            ? SDL_WaitEventTimeout(&event, 16)
+            : SDL_WaitEvent(&event);
+        if (startupFrames > 0) --startupFrames;
+        if (gotEvent) {
             do {
                 ImGui_ImplSDL2_ProcessEvent(&event);
                 if (event.type == SDL_QUIT) {
@@ -131,6 +161,7 @@ int main(int argc, char* argv[]) {
             if (ImGui::Button("Cancel", ImVec2(buttonWidth, buttonHeight))) {
                 running = false;
             }
+            ImGui::SetItemDefaultFocus();
 
             ImGui::SameLine(0.0f, spacing);
 
@@ -174,7 +205,8 @@ int main(int argc, char* argv[]) {
         ImGui::End();
 
         ImGui::Render();
-        SDL_SetRenderDrawColor(renderer, 45, 45, 45, 255);
+        const auto background = palette::kClear;
+        SDL_SetRenderDrawColor(renderer, background.r, background.g, background.b, background.a);
         SDL_RenderClear(renderer);
         ImGui_ImplSDLRenderer2_RenderDrawData(ImGui::GetDrawData(), renderer);
         SDL_RenderPresent(renderer);

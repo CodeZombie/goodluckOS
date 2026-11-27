@@ -1,3 +1,4 @@
-#!/bin/bash
-mkdir -p local-out
-g++ puppy.cpp -o local-out/puppy -O2 -lSDL2 -lSDL2_image -lSDL2_ttf
+#!/bin/sh
+set -eu
+cd -- "$(dirname -- "$0")"
+exec make all "$@"

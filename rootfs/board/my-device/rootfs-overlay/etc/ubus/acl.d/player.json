@@ -1,0 +1,12 @@
+{
+  "user": "player",
+  "access": {
+    "*": {
+      "methods": ["*"]
+    }
+  },
+  "publish": ["*"],
+  "subscribe": ["*"],
+  "listen": ["*"],
+  "send": ["*"]
+}

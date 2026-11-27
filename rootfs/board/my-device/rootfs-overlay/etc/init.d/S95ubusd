@@ -2,6 +2,7 @@
 
 DAEMON="ubusd"
 DAEMON_PATH="/usr/sbin/ubusd"
+ACL_DIR="/etc/ubus/acl.d"
 
 [ -x "$DAEMON_PATH" ] || exit 0
 
@@ -12,7 +13,7 @@ start() {
         return 0
     fi
 
-    "$DAEMON_PATH" >/dev/null 2>&1 &
+    "$DAEMON_PATH" -A "$ACL_DIR" >/dev/null 2>&1 &
 }
 
 status() {

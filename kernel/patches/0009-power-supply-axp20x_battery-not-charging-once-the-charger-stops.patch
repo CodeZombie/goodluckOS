@@ -1,0 +1,41 @@
+From: alvesmaicon <alvesmaiconn@gmail.com>
+Subject: [PATCH] power: supply: axp20x_battery: not charging once the charger stops
+
+The battery current's direction bit (0x00 bit 2) stays set on the
+AXP22x after the charger ends a charge, with 1-2 mA flowing, so the
+status read Charging next to a full gauge for as long as the charger
+stayed plugged in, and also while the charger was turned off on
+purpose. Report Charging only while the charger says it is charging
+(0x01 bit 6); otherwise the status falls through to Full or Not
+charging as before.
+
+diff --git a/drivers/power/supply/axp20x_battery.c b/drivers/power/supply/axp20x_battery.c
+--- a/drivers/power/supply/axp20x_battery.c
++++ b/drivers/power/supply/axp20x_battery.c
+@@ -38,6 +38,7 @@
+ #define AXP717_PWR_STATUS_BAT_CHRG	1
+ #define AXP717_PWR_STATUS_BAT_DISCHRG	2
+ 
++#define AXP20X_PWR_OP_CHARGING		BIT(6)
+ #define AXP20X_PWR_OP_BATT_PRESENT	BIT(5)
+ #define AXP20X_PWR_OP_BATT_ACTIVATED	BIT(3)
+ #define AXP717_PWR_OP_BATT_PRESENT	BIT(3)
+@@ -299,8 +300,16 @@ static int axp20x_battery_get_prop(struct power_supply *psy,
+ 			return ret;
+ 
+ 		if (reg & AXP20X_PWR_STATUS_BAT_CHARGING) {
+-			val->intval = POWER_SUPPLY_STATUS_CHARGING;
+-			return 0;
++			/* a trickle keeps the direction after the charger stops */
++			ret = regmap_read(axp20x_batt->regmap, AXP20X_PWR_OP_MODE,
++					  &reg);
++			if (ret)
++				return ret;
++
++			if (reg & AXP20X_PWR_OP_CHARGING) {
++				val->intval = POWER_SUPPLY_STATUS_CHARGING;
++				return 0;
++			}
+ 		}
+ 
+ 		ret = iio_read_channel_processed(axp20x_batt->batt_dischrg_i,

@@ -1,0 +1,38 @@
+From: alvesmaicon <alvesmaiconn@gmail.com>
+Subject: [PATCH] mfd: axp20x: charge done IRQ for the AXP22x battery
+
+The battery driver needs to know when the charger ends a charge, to set
+the fuel gauge's count to full. Pass it the AXP22x's CHARG_DONE IRQ.
+
+diff --git a/drivers/mfd/axp20x.c b/drivers/mfd/axp20x.c
+--- a/drivers/mfd/axp20x.c
++++ b/drivers/mfd/axp20x.c
+@@ -333,6 +333,10 @@ static const struct resource axp22x_usb_power_supply_resources[] = {
+ 	DEFINE_RES_IRQ_NAMED(AXP22X_IRQ_VBUS_REMOVAL, "VBUS_REMOVAL"),
+ };
+ 
++static const struct resource axp22x_battery_power_supply_resources[] = {
++	DEFINE_RES_IRQ_NAMED(AXP22X_IRQ_CHARG_DONE, "CHARG_DONE"),
++};
++
+ static const struct resource axp717_usb_power_supply_resources[] = {
+ 	DEFINE_RES_IRQ_NAMED(AXP717_IRQ_VBUS_OVER_V, "VBUS_OVER_V"),
+ 	DEFINE_RES_IRQ_NAMED(AXP717_IRQ_VBUS_PLUGIN, "VBUS_PLUGIN"),
+@@ -1011,6 +1015,8 @@ static const struct mfd_cell axp221_cells[] = {
+ 	}, {
+ 		.name		= "axp20x-battery-power-supply",
+ 		.of_compatible	= "x-powers,axp221-battery-power-supply",
++		.num_resources	= ARRAY_SIZE(axp22x_battery_power_supply_resources),
++		.resources	= axp22x_battery_power_supply_resources,
+ 	}, {
+ 		.name		= "axp20x-usb-power-supply",
+ 		.of_compatible	= "x-powers,axp221-usb-power-supply",
+@@ -1033,6 +1039,8 @@ static const struct mfd_cell axp223_cells[] = {
+ 	}, {
+ 		.name		= "axp20x-battery-power-supply",
+ 		.of_compatible	= "x-powers,axp221-battery-power-supply",
++		.num_resources	= ARRAY_SIZE(axp22x_battery_power_supply_resources),
++		.resources	= axp22x_battery_power_supply_resources,
+ 	}, {
+ 		.name		= "axp20x-regulator",
+ 	}, {
